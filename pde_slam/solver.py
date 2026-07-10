@@ -191,7 +191,7 @@ class AdvectionDiffusionSolver:
             stepsize_controller=diffrax.ConstantStepSize(),
             adjoint=self._adjoint,
             max_steps=int((t_end - t0) / self.dt_max) + 2,
-            saveat=diffrax.SaveAt(ts=saveat) if saveat is not None else None,
+            saveat=diffrax.SaveAt(ts=saveat) if saveat is not None else diffrax.SaveAt(t1=True),
         )
         if saveat is None:
             return sol.ys[-1]

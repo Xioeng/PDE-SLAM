@@ -1,4 +1,5 @@
 """Shared test fixtures for pde_slam test suite."""
+
 from __future__ import annotations
 
 import numpy as np

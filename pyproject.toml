@@ -16,6 +16,8 @@ dependencies = [
     # --- JAX ecosystem (CPU by default) ---
     "jax>=0.4.30",
     "jaxlib>=0.4.30",
+    # --- JAX ecosystem (CUDA 12 support) ---
+    "jax[cuda12]>=0.4.30",
     # --- Differentiable ODE/PDE solvers ---
     "diffrax>=0.6.0",
     # --- Scientific stack ---

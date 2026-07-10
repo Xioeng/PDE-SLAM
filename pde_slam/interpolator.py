@@ -37,7 +37,6 @@ import numpy as np
 from jax import Array
 from scipy.interpolate import RBFInterpolator, griddata
 
-
 # ---------------------------------------------------------------------------
 # Grid specification
 # ---------------------------------------------------------------------------
@@ -137,9 +136,6 @@ class FieldInterpolator:
         *,
         rbf_kernel: str = "thin_plate_spline",
         rbf_smoothing: float = 0.0,
-        spline_kx: int = 3,
-        spline_ky: int = 3,
-        spline_s: float | None = None,
         fill_value: float = 0.0,
     ) -> None:
         if method not in ("rbf", "spline"):
@@ -148,9 +144,6 @@ class FieldInterpolator:
         self.method = method
         self._rbf_kernel = rbf_kernel
         self._rbf_smoothing = rbf_smoothing
-        self._spline_kx = spline_kx
-        self._spline_ky = spline_ky
-        self._spline_s = spline_s
         self._fill_value = fill_value
 
         self._xy_obs: np.ndarray | None = None
@@ -230,7 +223,8 @@ class FieldInterpolator:
 
     def _rbf(self, xy_obs: np.ndarray, values: np.ndarray) -> np.ndarray:
         rbf = RBFInterpolator(
-            xy_obs, values,
+            xy_obs,
+            values,
             kernel=self._rbf_kernel,
             smoothing=self._rbf_smoothing,
         )
@@ -247,38 +241,3 @@ class FieldInterpolator:
             z_cubic[outside] = z_nn[outside]
         return z_cubic
 
-
-# ---------------------------------------------------------------------------
-# Backward-compatible helper used by data_pipeline / main
-# ---------------------------------------------------------------------------
-
-
-def build_initial_condition(
-    measurement_pool: dict[str, np.ndarray],
-    field_key: str,
-    grid: SpatialGrid,
-    method: Literal["rbf", "spline"] = "rbf",
-    **kwargs: object,
-) -> Array:
-    """Build the PDE initial condition from the measurement pool.
-
-    Thin wrapper around :class:`FieldInterpolator` kept for compatibility
-    with :mod:`pde_slam.main`.
-
-    Parameters
-    ----------
-    measurement_pool :
-        Dict with keys ``"xy_enu"`` ``(N, 2)`` and *field_key* ``(N,)``.
-    field_key :
-        Name of the scalar field to interpolate (e.g. ``"salinity_psu"``).
-    grid :
-        Target computational grid.
-    method :
-        ``"rbf"`` or ``"spline"``.
-    **kwargs :
-        Forwarded to :class:`FieldInterpolator`.
-    """
-    xy_obs = measurement_pool["xy_enu"].astype(np.float64)
-    values = measurement_pool[field_key].astype(np.float64)
-    interp = FieldInterpolator(grid, method=method, **kwargs)
-    return interp.fit_predict(xy_obs, values)

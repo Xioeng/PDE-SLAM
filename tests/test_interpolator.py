@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pde_slam.interpolator import FieldInterpolator, SpatialGrid, build_initial_condition
+from pde_slam.interpolator import FieldInterpolator, SpatialGrid
 
 GRID = SpatialGrid(x_min=-50.0, x_max=50.0, y_min=-50.0, y_max=50.0, nx=20, ny=20)
 
@@ -106,18 +106,3 @@ class TestConstructorValidation:
         with pytest.raises(ValueError, match="shape"):
             FieldInterpolator(GRID).fit(xy, vals)
 
-
-# ---------------------------------------------------------------------------
-# Backward-compat helper
-# ---------------------------------------------------------------------------
-
-class TestBuildInitialCondition:
-    def test_integration_with_pool(self) -> None:
-        xy, vals = _make_scattered(n=100)
-        pool = {
-            "timestamp_s": np.arange(100, dtype=float),
-            "xy_enu": xy,
-            "salinity_psu": vals,
-        }
-        phi0 = build_initial_condition(pool, "salinity_psu", GRID)
-        assert phi0.shape == (20, 20)
