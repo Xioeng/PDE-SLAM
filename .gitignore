@@ -1,0 +1,17 @@
+outputs/
+data/raw/*.csv
+data/raw/*.json
+data/processed/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.log

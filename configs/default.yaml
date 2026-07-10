@@ -1,0 +1,67 @@
+# PDE-SLAM: Default Configuration
+# ================================
+# All values can be overridden at the CLI:
+#   pde-slam configs/default.yaml phase2.n_epochs=200 grid.nx=128
+
+data:
+  # Path to the raw survey log (CSV or NDJSON)
+  raw_log: "data/raw/survey.csv"
+  # Which scalar field to use as the primary PDE observable
+  field_key: "salinity_psu"
+
+grid:
+  # ENU domain extents [m]
+  x_min: -500.0
+  x_max:  500.0
+  y_min: -500.0
+  y_max:  500.0
+  # Grid resolution
+  nx: 64
+  ny: 64
+
+kinematics:
+  # Thrust-to-speed coefficient [m s⁻¹ / unit]
+  c_v: 0.85
+  # Rudder-to-yaw-rate coefficient [rad s⁻¹ / unit]
+  c_omega: 0.40
+  # Dead-reckoning integration step [s]
+  dt: 0.5
+  # WGS-84 ENU reference origin
+  origin_lat: 36.8
+  origin_lon: -76.0
+
+phase1:
+  # Interpolation backend: "rbf" or "spline"
+  interp_method: "rbf"
+
+phase2:
+  # Total number of alternating optimisation epochs
+  n_epochs: 100
+  # Number of trajectory gradient steps per epoch
+  n_traj_steps: 5
+  # Number of PDE parameter gradient steps per epoch
+  n_pde_steps: 5
+  # Mini-batch size drawn from the replay buffer
+  batch_size: 128
+  # Replay buffer capacity (reservoir sampled)
+  replay_capacity: 10000
+  # PDE prediction horizon for the verification loss [s]
+  pde_dt: 5.0
+  # Adam learning rates
+  lr_traj: 0.001
+  lr_pde: 0.0001
+  # Loss term weights
+  loss_weights:
+    data: 1.0
+    pde: 1.0
+    reg_trajectory: 0.001
+    reg_velocity: 0.0001
+
+# Directory for checkpoints, plots, and logs
+output_dir: "outputs/"
+
+# Global random seed
+seed: 42
+
+# Logging verbosity: DEBUG, INFO, WARNING, ERROR
+log_level: "INFO"
