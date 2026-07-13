@@ -20,16 +20,15 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 from pathlib import Path
 
 import matplotlib
 
 # Use interactive GUI backend if possible
-try:
+with contextlib.suppress(Exception):
     matplotlib.use("TkAgg")
-except Exception:
-    pass
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -48,10 +47,9 @@ DEFAULT_LON0 = -80.13657451246902
 TIDAL_U = np.array([0.03, 0.05])
 
 # Biscayne Bay physical field parameters
-PLUME_SOURCE = np.array([0.0, 0])
 AMBIENT_SALINITY = 36.0
 FRESH_SALINITY = 12.0
-PLUME_WIDTH = 80.0
+PLUME_WIDTH = 50.0
 PLUME_DECAY = 0.004
 
 AMBIENT_TEMP = 30.0
@@ -63,38 +61,118 @@ CHL_AMBIENT = 0.5
 CHL_PLUME_PEAK = 5.0
 
 
-def _plume_salinity(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    plume_dir = np.array([1.0, 1.0]) / np.sqrt(2.0)
-    dx = x - PLUME_SOURCE[0]
-    dy = y - PLUME_SOURCE[1]
-    along = dx * plume_dir[0] + dy * plume_dir[1]
-    cross = -dx * plume_dir[1] + dy * plume_dir[0]
-    along_clamped = np.maximum(along, 0.0)
-    width = PLUME_WIDTH + 0.15 * along_clamped
-    freshness = np.exp(-0.5 * (cross / width) ** 2) * np.exp(
-        -PLUME_DECAY * along_clamped
-    )
-    return AMBIENT_SALINITY - (AMBIENT_SALINITY - FRESH_SALINITY) * freshness
+def _plume_salinity(
+    x: np.ndarray, y: np.ndarray, plume_sources: np.ndarray
+) -> np.ndarray:
+    total_freshness = np.zeros_like(x)
+    for px, py in plume_sources:
+        plume_dir = np.array([1.0, 1.0]) / np.sqrt(2.0)
+        dx = x - px
+        dy = y - py
+        along = dx * plume_dir[0] + dy * plume_dir[1]
+        cross = -dx * plume_dir[1] + dy * plume_dir[0]
+        along_clamped = np.maximum(along, 0.0)
+        width = PLUME_WIDTH + 0.15 * along_clamped
+        freshness = np.exp(-0.5 * (cross / width) ** 2) * np.exp(
+            -PLUME_DECAY * along_clamped
+        )
+        total_freshness = np.maximum(total_freshness, freshness)
+
+    sal = AMBIENT_SALINITY - (AMBIENT_SALINITY - FRESH_SALINITY) * total_freshness
+
+    # Add localized peaks (positive and negative salinity anomalies)
+    for i, (px, py) in enumerate(plume_sources):
+        amp = 4.0 if i % 2 == 0 else -4.0
+        sal += amp * np.exp(-0.5 * (((x - px) ** 2 + (y - py) ** 2) / (50.0**2)))
+
+    return sal
 
 
-def _front_temperature(x: np.ndarray, _y: np.ndarray) -> np.ndarray:
-    return AMBIENT_TEMP + (INTRUSION_TEMP - AMBIENT_TEMP) / (
+def _front_temperature(
+    x: np.ndarray, y: np.ndarray, plume_sources: np.ndarray
+) -> np.ndarray:
+    # Base temperature from front
+    temp = AMBIENT_TEMP + (INTRUSION_TEMP - AMBIENT_TEMP) / (
         1.0 + np.exp((x - FRONT_X) / FRONT_WIDTH)
     )
+    # Add thermal peaks at the plume sources
+    for i, (px, py) in enumerate(plume_sources):
+        amp = 2.0 if i % 2 == 0 else -1.5
+        temp += amp * np.exp(-0.5 * (((x - px) ** 2 + (y - py) ** 2) / (40.0**2)))
+    return temp
 
 
-def _plume_chlorophyll(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    plume_dir = np.array([1.0, 1.0]) / np.sqrt(2.0)
-    dx = x - PLUME_SOURCE[0]
-    dy = y - PLUME_SOURCE[1]
-    along = dx * plume_dir[0] + dy * plume_dir[1]
-    cross = -dx * plume_dir[1] + dy * plume_dir[0]
-    along_clamped = np.maximum(along, 0.0)
-    width = PLUME_WIDTH * 1.2 + 0.2 * along_clamped
-    bloom = np.exp(-0.5 * (cross / width) ** 2) * np.exp(
-        -PLUME_DECAY * 0.5 * np.maximum(along_clamped - 50.0, 0.0)
-    )
-    return CHL_AMBIENT + (CHL_PLUME_PEAK - CHL_AMBIENT) * bloom
+def _plume_chlorophyll(
+    x: np.ndarray, y: np.ndarray, plume_sources: np.ndarray
+) -> np.ndarray:
+    total_bloom = np.zeros_like(x)
+    for px, py in plume_sources:
+        plume_dir = np.array([1.0, 1.0]) / np.sqrt(2.0)
+        dx = x - px
+        dy = y - py
+        along = dx * plume_dir[0] + dy * plume_dir[1]
+        cross = -dx * plume_dir[1] + dy * plume_dir[0]
+        along_clamped = np.maximum(along, 0.0)
+        width = PLUME_WIDTH * 1.2 + 0.2 * along_clamped
+        bloom = np.exp(-0.5 * (cross / width) ** 2) * np.exp(
+            -PLUME_DECAY * 0.5 * np.maximum(along_clamped - 50.0, 0.0)
+        )
+        total_bloom = np.maximum(total_bloom, bloom)
+
+    chl = CHL_AMBIENT + (CHL_PLUME_PEAK - CHL_AMBIENT) * total_bloom
+
+    # Add sharp chlorophyll peaks at the sources
+    for px, py in plume_sources:
+        chl += 2.0 * np.exp(-0.5 * (((x - px) ** 2 + (y - py) ** 2) / (30.0**2)))
+
+    return chl
+
+
+
+def get_random_points_in_polygon(
+    x_poly: np.ndarray, y_poly: np.ndarray, num_points: int, rng: np.random.Generator
+) -> np.ndarray:
+    """Sample random points inside a 2D polygon in ENU coordinates.
+
+    Parameters
+    ----------
+    x_poly : np.ndarray
+        X coordinates of the polygon vertices in meters.
+    y_poly : np.ndarray
+        Y coordinates of the polygon vertices in meters.
+    num_points : int
+        Number of points to sample.
+    rng : np.random.Generator
+        Random number generator.
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (num_points, 2) containing the sampled points.
+    """
+    from matplotlib.path import Path as MPath
+
+    path = MPath(np.stack([x_poly, y_poly], axis=1))
+    x_min, x_max = x_poly.min(), x_poly.max()
+    y_min, y_max = y_poly.min(), y_poly.max()
+
+    points = []
+    for _ in range(10000):
+        xs = rng.uniform(x_min, x_max, size=num_points * 2)
+        ys = rng.uniform(y_min, y_max, size=num_points * 2)
+        candidates = np.stack([xs, ys], axis=1)
+        inside = path.contains_points(candidates)
+        valid = candidates[inside]
+        for pt in valid:
+            points.append(pt)
+            if len(points) == num_points:
+                return np.array(points)
+
+    # Fallback to mean of polygon if sampling fails
+    mean_pt = np.array([x_poly.mean(), y_poly.mean()])
+    while len(points) < num_points:
+        points.append(mean_pt)
+    return np.array(points)
 
 
 def load_polygon(
@@ -211,10 +289,25 @@ def main() -> None:
         help="CLI waypoints 'lat,lon;lat,lon;...' (bypasses GUI).",
     )
     parser.add_argument("--seed", type=int, default=0, help="RNG seed.")
+    parser.add_argument(
+        "--num-sources",
+        type=int,
+        default=3,
+        help="Number of random plume sources to generate.",
+    )
     args = parser.parse_args()
 
     frame = ENUFrame(lat0=args.lat0, lon0=args.lon0)
     lats_poly, lons_poly = load_polygon(args.polygon, frame)
+
+    # Convert polygon boundary to ENU coordinates and choose random plume sources
+    x_poly, y_poly = frame.to_enu(lats_poly, lons_poly)
+    rng = np.random.default_rng(args.seed)
+    plume_sources = get_random_points_in_polygon(x_poly, y_poly, args.num_sources, rng)
+
+    print("\nGenerated Plume Sources (ENU):")
+    for idx, (px, py) in enumerate(plume_sources):
+        print(f"  Source {idx + 1}: x={px:.2f} m, y={py:.2f} m")
 
     # Get waypoints
     if args.waypoints is not None:
@@ -261,7 +354,6 @@ def main() -> None:
     )
 
     # Generate synthetic observations along the trajectory
-    rng = np.random.default_rng(args.seed)
     rows = []
     t = 0.0
 
@@ -270,9 +362,9 @@ def main() -> None:
         x_eff = x + TIDAL_U[0] * t
         y_eff = y + TIDAL_U[1] * t
 
-        sal = _plume_salinity(np.array([x_eff]), np.array([y_eff]))[0]
-        tmp = _front_temperature(np.array([x_eff]), np.array([y_eff]))[0]
-        chl = _plume_chlorophyll(np.array([x_eff]), np.array([y_eff]))[0]
+        sal = _plume_salinity(np.array([x_eff]), np.array([y_eff]), plume_sources)[0]
+        tmp = _front_temperature(np.array([x_eff]), np.array([y_eff]), plume_sources)[0]
+        chl = _plume_chlorophyll(np.array([x_eff]), np.array([y_eff]), plume_sources)[0]
 
         lat, lon = frame.from_enu(np.array([x]), np.array([y]))
 
@@ -304,7 +396,7 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_path, index=False)
 
-    print(f"\nSimulation complete!")
+    print("\nSimulation complete!")
     print(f"Wrote {len(df)} rows → {out_path}")
     print(f"  Duration  : {df['Time'].max():.1f} s")
     print(f"  Lat range : [{df['Latitude'].min():.6f}, {df['Latitude'].max():.6f}] °")
@@ -316,7 +408,8 @@ def main() -> None:
         f"  Temp      : [{df['Temperature (C)'].min():.2f}, {df['Temperature (C)'].max():.2f}] °C"
     )
     print(
-        f"  Chlorophyll: [{df['Chlorophyll (ug/L)'].min():.2f}, {df['Chlorophyll (ug/L)'].max():.2f}] µg/L"
+        f"  Chlorophyll: [{df['Chlorophyll (ug/L)'].min():.2f}, "
+        f"{df['Chlorophyll (ug/L)'].max():.2f}] µg/L"
     )
 
 

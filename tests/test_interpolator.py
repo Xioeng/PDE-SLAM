@@ -106,3 +106,51 @@ class TestConstructorValidation:
         with pytest.raises(ValueError, match="shape"):
             FieldInterpolator(GRID).fit(xy, vals)
 
+
+# ---------------------------------------------------------------------------
+# SpatiotemporalInterpolator
+# ---------------------------------------------------------------------------
+
+class TestSpatiotemporalInterpolator:
+    def test_spatiotemporal_interpolation(self) -> None:
+        import jax
+        import jax.numpy as jnp
+        from pde_slam.interpolator import SpatiotemporalInterpolator
+
+        # Create a simple 3x3 grid
+        grid = SpatialGrid(x_min=0.0, x_max=2.0, y_min=0.0, y_max=2.0, nx=3, ny=3)
+        ts = jnp.array([0.0, 1.0, 2.0])
+
+        # Create snapshots: f(x, y, t) = x + y + t
+        # grid.XX has shape (ny, nx) -> XX[y, x]
+        t_grid, y_grid, x_grid = jnp.meshgrid(
+            ts, grid.YY[:, 0], grid.XX[0, :], indexing="ij"
+        )
+        snapshots = x_grid + y_grid + t_grid  # shape (3, 3, 3)
+
+        interp = SpatiotemporalInterpolator(grid, ts, snapshots)
+
+        # 1. Test exact values at grid nodes
+        val = interp(1.0, 1.0, 1.0)
+        assert float(val) == pytest.approx(3.0, abs=1e-5)
+
+        # 2. Test intermediate coordinates (trilinear interpolation)
+        # (x, y, t) = (0.5, 1.5, 0.5)
+        # Expected: 0.5 + 1.5 + 0.5 = 2.5
+        val_interp = interp(0.5, 1.5, 0.5)
+        assert float(val_interp) == pytest.approx(2.5, abs=1e-5)
+
+        # 3. Test differentiability w.r.t coordinates
+        grad_fn = jax.grad(lambda x: interp(x, 1.0, 1.0))
+        assert float(grad_fn(1.0)) == pytest.approx(1.0, abs=1e-3)
+
+        # 4. Test differentiability w.r.t snapshots
+        def loss(snaps):
+            model = SpatiotemporalInterpolator(grid, ts, snaps)
+            return model(0.5, 0.5, 0.5)
+
+        grad_snaps = jax.grad(loss)(snapshots)
+        assert grad_snaps.shape == snapshots.shape
+        assert float(jnp.sum(grad_snaps)) == pytest.approx(1.0, abs=1e-5)
+
+

@@ -1,9 +1,3 @@
-"""
-interpolator.py
-===============
-Backward-compatibility facade for the pde_slam.interpolators subpackage.
-"""
-
 from __future__ import annotations
 
 from pde_slam.interpolators.field import FieldInterpolator

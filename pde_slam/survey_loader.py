@@ -334,9 +334,6 @@ class SurveyLoader:
         self,
         csv_path: str | Path,
         fields: Sequence[str],
-        *,
-        method: str = "rbf",
-        grid: SpatialGrid | None = None,
     ) -> dict[str, np.ndarray]:
         """Load multiple scalar fields from *csv_path* into ENU-projected arrays.
 
