@@ -1,41 +1,48 @@
 """
 scripts/generate_synthetic_survey.py
 =====================================
-Generate a synthetic Phase 1 survey CSV with realistic water features.
+Generate a synthetic survey CSV driven by the :class:`~pde_slam.kinematics.UnicycleKinematics`
+robot model, with GPS coordinates and realistic Biscayne Bay (Miami, FL) scalar fields.
 
-The domain is a 500 × 500 m metric patch (ENU coordinates, origin at
-centre).  The synthetic scalar fields mimic common coastal/estuarine
-water features:
-
-Salinity
-    A **river plume** emanating from the south-west corner, modelled as
-    a Gaussian jet that decays exponentially with distance from the
-    plume centreline.  Salinity is low near the source (fresh water)
-    and rises toward the ambient ocean value away from it.
-
-Temperature
-    A **warm-water intrusion** from the east boundary, implemented as a
-    sigmoid front, plus a gentle large-scale gradient mimicking solar
-    heating of shallow near-shore water.
-
-Advection
-    The underlying flow field is a mean tidal current directed north-east
-    (0.08 m s⁻¹) plus a weak anti-clockwise eddy centred at (100, 50) m.
-    The vehicle samples the field at its instantaneous position as it
-    moves through this evolving flow.
+Robot model
+-----------
+The vehicle is a thrust-controlled, compass-heading robot.  The thrust command
+is derived from the desired survey speed and the ``k_thrust`` parameter
+(m s⁻¹ per unit thrust).  Heading is set by a perfect compass; position is
+integrated by :class:`~pde_slam.kinematics.UnicycleKinematics`.
 
 Survey track
-    Lawnmower pattern: 8 parallel east-west passes spaced 60 m apart,
-    at 0.4 m s⁻¹, sampled every 1 s.
+------------
+Lawnmower pattern: parallel east-west passes connected by northward turns.
+Each row in the output is a sensor sample recorded at the robot's ENU position
+(before the position is advanced by one integration step).
 
-Output
-------
-CSV with columns: ``t_s, x_m, y_m, salinity_psu, temperature_c``
+Scalar fields (Biscayne Bay, July)
+------------------------------------
+* **Salinity** [PSU] — canal/Everglades freshwater plume (SW origin),
+  ambient 36 PSU, fresh end-member 12 PSU.
+* **Temperature** [°C] — warm-shallow-flats intrusion from the east,
+  ambient 30.0 °C, peak 32.5 °C.
+* **Chlorophyll-a** [µg/L] — bloom correlated with the salinity plume,
+  ambient 0.5 µg/L, plume peak 5.0 µg/L.
+
+GPS output
+----------
+ENU (x_m, y_m) positions are converted to geodetic (lat_deg, lon_deg) via
+:class:`~pde_slam.coords.ENUFrame` with a user-configurable survey origin
+(default: Biscayne Bay centre, 25.9096°N 80.1366°W).
+
+Output columns
+--------------
+``t_s, lat_deg, lon_deg, x_m, y_m, heading_rad, thrust,
+salinity_psu, temperature_c, chlorophyll_ug_l``
 
 Usage::
 
     python scripts/generate_synthetic_survey.py
-    python scripts/generate_synthetic_survey.py --output data/raw/survey.csv
+    python scripts/generate_synthetic_survey.py \\
+        --lat0 25.909619867836824 --lon0 -80.13657451246902 \\
+        --k-thrust 1.5 --speed 1.0 --output data/raw/survey.csv
 """
 
 from __future__ import annotations
@@ -46,60 +53,123 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from pde_slam.coords import ENUFrame
+from pde_slam.kinematics import UnicycleKinematics
+
 # ---------------------------------------------------------------------------
-# True physical parameters
+# Default survey origin — Biscayne Bay, Miami FL
+# ---------------------------------------------------------------------------
+DEFAULT_LAT0 = 25.909619867836824
+DEFAULT_LON0 = -80.13657451246902
+
+# ---------------------------------------------------------------------------
+# Physical parameters — Biscayne Bay, Miami FL (July)
 # ---------------------------------------------------------------------------
 
-# Tidal mean current [m/s]
-TIDAL_U = np.array([0.06, 0.05])
+# Tidal mean current [m/s] — flood tide, broadly northward in the bay
+TIDAL_U = np.array([0.03, 0.05])  # (east, north) m/s
 
-# River plume source position [m] and fresh-water salinity
+# Canal / Everglades freshwater plume — SW origin
 PLUME_SOURCE = np.array([-220.0, -220.0])
-AMBIENT_SALINITY = 34.5   # PSU (ocean background)
-FRESH_SALINITY   = 18.0   # PSU (river end-member)
-PLUME_WIDTH      = 80.0   # m, Gaussian half-width of plume cross-section
-PLUME_DECAY      = 0.004  # m⁻¹, along-plume exponential decay
+AMBIENT_SALINITY = 36.0  # PSU — slightly hypersaline in the dry season
+FRESH_SALINITY = 12.0  # PSU — Everglades / canal freshwater end-member
+PLUME_WIDTH = 80.0  # m,  Gaussian half-width at source
+PLUME_DECAY = 0.004  # m⁻¹, along-plume exponential mixing decay
 
-# Warm intrusion
-AMBIENT_TEMP    = 16.0  # °C
-INTRUSION_TEMP  = 22.0  # °C
-FRONT_X         = 80.0  # m, position of thermal front (east of centre)
-FRONT_WIDTH     = 40.0  # m, sigmoid transition width
+# Temperature: warm shallow flats intrusion from the east
+AMBIENT_TEMP = 30.0  # °C — mean bay surface, July
+INTRUSION_TEMP = 32.5  # °C — very shallow eastern flats
+FRONT_X = 80.0  # m,  position of thermal front
+FRONT_WIDTH = 40.0  # m,  sigmoid transition half-width
+
+# Chlorophyll-a bloom correlated with the freshwater plume
+CHL_AMBIENT = 0.5  # µg/L — open bay background
+CHL_PLUME_PEAK = 5.0  # µg/L — at the plume core near source
 
 
 # ---------------------------------------------------------------------------
-# Synthetic field functions
+# Synthetic scalar field functions
 # ---------------------------------------------------------------------------
 
 
 def _plume_salinity(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """River plume salinity field [PSU].
+    """Salinity field [PSU] — Everglades/canal freshwater plume.
 
-    Low-salinity jet originates at PLUME_SOURCE, travels north-east,
-    widening and mixing with ambient water along the way.
+    Parameters
+    ----------
+    x, y :
+        ENU east and north positions [m].
+
+    Returns
+    -------
+    salinity :
+        Salinity values at each (x, y) point [PSU].
     """
     plume_dir = np.array([1.0, 1.0]) / np.sqrt(2.0)
     dx = x - PLUME_SOURCE[0]
     dy = y - PLUME_SOURCE[1]
 
-    along = dx * plume_dir[0] + dy * plume_dir[1]   # distance along jet axis
+    along = dx * plume_dir[0] + dy * plume_dir[1]  # distance along jet axis
     cross = -dx * plume_dir[1] + dy * plume_dir[0]  # cross-jet distance
 
-    # Plume only exists downstream (along > 0)
     along_clamped = np.maximum(along, 0.0)
-
-    # Cross-jet Gaussian profile widens with distance
     width = PLUME_WIDTH + 0.15 * along_clamped
-    freshness = np.exp(-0.5 * (cross / width) ** 2) * np.exp(-PLUME_DECAY * along_clamped)
-
+    freshness = np.exp(-0.5 * (cross / width) ** 2) * np.exp(
+        -PLUME_DECAY * along_clamped
+    )
     return AMBIENT_SALINITY - (AMBIENT_SALINITY - FRESH_SALINITY) * freshness
 
 
 def _front_temperature(x: np.ndarray, _y: np.ndarray) -> np.ndarray:
-    """Warm-water intrusion from the east [°C], sigmoid front."""
+    """Temperature field [°C] — warm shallow-flats intrusion from the east.
+
+    Parameters
+    ----------
+    x :
+        ENU east position [m].
+    _y :
+        ENU north position [m] (unused; retained for API uniformity).
+
+    Returns
+    -------
+    temperature :
+        Temperature values at each x position [°C].
+    """
     return AMBIENT_TEMP + (INTRUSION_TEMP - AMBIENT_TEMP) / (
         1.0 + np.exp((x - FRONT_X) / FRONT_WIDTH)
     )
+
+
+def _plume_chlorophyll(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Chlorophyll-a field [µg/L] — bloom correlated with freshwater plume.
+
+    The bloom peaks slightly *downstream* of the salinity minimum to mimic
+    the biological lag between nutrient injection and phytoplankton growth.
+
+    Parameters
+    ----------
+    x, y :
+        ENU east and north positions [m].
+
+    Returns
+    -------
+    chl :
+        Chlorophyll-a concentrations at each (x, y) point [µg/L].
+    """
+    plume_dir = np.array([1.0, 1.0]) / np.sqrt(2.0)
+    dx = x - PLUME_SOURCE[0]
+    dy = y - PLUME_SOURCE[1]
+
+    along = dx * plume_dir[0] + dy * plume_dir[1]
+    cross = -dx * plume_dir[1] + dy * plume_dir[0]
+
+    along_clamped = np.maximum(along, 0.0)
+    # Wider Gaussian + delayed decay to place bloom slightly downstream
+    width = PLUME_WIDTH * 1.2 + 0.2 * along_clamped
+    bloom = np.exp(-0.5 * (cross / width) ** 2) * np.exp(
+        -PLUME_DECAY * 0.5 * np.maximum(along_clamped - 50.0, 0.0)
+    )
+    return CHL_AMBIENT + (CHL_PLUME_PEAK - CHL_AMBIENT) * bloom
 
 
 # ---------------------------------------------------------------------------
@@ -108,73 +178,142 @@ def _front_temperature(x: np.ndarray, _y: np.ndarray) -> np.ndarray:
 
 
 def generate_survey(
+    lat0: float = DEFAULT_LAT0,
+    lon0: float = DEFAULT_LON0,
     n_passes: int = 8,
     pass_spacing_m: float = 60.0,
     domain_half: float = 240.0,
-    speed_mps: float = 0.4,
+    speed_mps: float = 1.0,
     dt_s: float = 1.0,
+    k_thrust: float = 1.0,
     noise_salinity: float = 0.05,
-    noise_temp: float = 0.02,
+    noise_temp: float = 0.05,
+    noise_chl: float = 0.03,
     rng_seed: int = 0,
 ) -> pd.DataFrame:
-    """Generate a lawnmower survey DataFrame.
+    """Generate a lawnmower survey driven by :class:`~pde_slam.kinematics.UnicycleKinematics`.
+
+    The robot executes east-west passes connected by northward turns.
+    Position is integrated by the kinematic model at every ``dt_s`` step;
+    GPS coordinates are derived from the ENU frame.
 
     Parameters
     ----------
+    lat0, lon0 :
+        Geodetic origin of the ENU frame (survey centre) [degrees].
+        Defaults to Biscayne Bay, Miami FL.
     n_passes :
-        Number of parallel survey lines.
+        Number of parallel east-west survey lines.
     pass_spacing_m :
-        North spacing between survey lines [m].
+        North spacing between consecutive survey lines [m].
     domain_half :
-        Half-width of the domain [m]; lines span ±domain_half in x.
+        Half-extent of the domain in the east direction [m].
+        Lines span ``[-domain_half, +domain_half]``.
     speed_mps :
-        Vehicle speed [m s⁻¹].
+        Desired robot speed along survey lines [m s⁻¹].
     dt_s :
-        Sampling interval [s].
-    noise_salinity, noise_temp :
-        Gaussian sensor noise standard deviations.
+        Sampling / integration interval [s].
+    k_thrust :
+        Thrust-to-speed factor [m s⁻¹ per unit thrust].  The constant thrust
+        command is ``speed_mps / k_thrust`` and must be ≤ 1.
+    noise_salinity :
+        Gaussian sensor noise standard deviation for salinity [PSU].
+    noise_temp :
+        Gaussian sensor noise standard deviation for temperature [°C].
+    noise_chl :
+        Gaussian sensor noise standard deviation for chlorophyll [µg/L].
     rng_seed :
         RNG seed for reproducibility.
 
     Returns
     -------
     df :
-        DataFrame with columns ``t_s, x_m, y_m, salinity_psu, temperature_c``.
+        DataFrame with columns:
+        ``t_s, lat_deg, lon_deg, x_m, y_m, heading_rad, thrust,
+        salinity_psu, temperature_c, chlorophyll_ug_l``.
+
+    Raises
+    ------
+    ValueError
+        If ``speed_mps / k_thrust > 1``.
     """
+    thrust_cmd = speed_mps / k_thrust
+    if thrust_cmd > 1.0:
+        raise ValueError(
+            f"speed_mps / k_thrust = {thrust_cmd:.3f} > 1.0 — "
+            "reduce speed_mps or increase k_thrust."
+        )
+
+    frame = ENUFrame(lat0=lat0, lon0=lon0)
     rng = np.random.default_rng(rng_seed)
+
+    # Navigation headings (convention: 0=North, π/2=East, CW positive)
+    HDG_EAST = np.pi / 2.0  # 90°
+    HDG_WEST = 3.0 * np.pi / 2.0  # 270°
+    HDG_NORTH = 0.0  # 0°
+
+    # Y-positions of each pass (centred around y=0)
+    y_passes = [-domain_half + i * pass_spacing_m for i in range(n_passes)]
+    y_passes = [y for y in y_passes if y <= domain_half]
+
+    # Number of integration steps per segment
+    n_steps_pass = max(1, round(2 * domain_half / (speed_mps * dt_s)))
+    n_steps_turn = max(1, round(pass_spacing_m / (speed_mps * dt_s)))
+
+    # Initialise robot at SW corner, heading east
+    robot = UnicycleKinematics(
+        k_thrust=k_thrust,
+        x0=-domain_half,
+        y0=y_passes[0],
+        heading0=HDG_EAST,
+    )
+
     rows: list[dict] = []
     t = 0.0
 
-    for i in range(n_passes):
-        y_track = -domain_half + i * pass_spacing_m
-        if y_track > domain_half:
-            break
+    for pass_idx, _y_track in enumerate(y_passes):
+        heading = HDG_EAST if pass_idx % 2 == 0 else HDG_WEST
 
-        x_start = -domain_half if i % 2 == 0 else domain_half
-        x_end   =  domain_half if i % 2 == 0 else -domain_half
-        n_steps = max(1, int(2 * domain_half / (speed_mps * dt_s)))
+        for _step in range(n_steps_pass):
+            x = robot.x_m
+            y = robot.y_m
 
-        for step in range(n_steps):
-            alpha = step / max(n_steps - 1, 1)
-            x = x_start + (x_end - x_start) * alpha
-
-            # Current position after tidal drift from t=0
+            # Sample scalar fields at tidally-advected position
             x_eff = x + TIDAL_U[0] * t
-            y_eff = y_track + TIDAL_U[1] * t
+            y_eff = y + TIDAL_U[1] * t
 
             sal = _plume_salinity(np.array([x_eff]), np.array([y_eff]))[0]
             tmp = _front_temperature(np.array([x_eff]), np.array([y_eff]))[0]
+            chl = _plume_chlorophyll(np.array([x_eff]), np.array([y_eff]))[0]
 
-            rows.append({
-                "t_s":           round(t, 2),
-                "x_m":           round(float(x), 3),
-                "y_m":           round(float(y_track), 3),
-                "salinity_psu":  round(float(sal) + rng.normal(0.0, noise_salinity), 4),
-                "temperature_c": round(float(tmp) + rng.normal(0.0, noise_temp), 4),
-            })
+            lat, lon = frame.from_enu(np.array([x]), np.array([y]))
+
+            rows.append(
+                {
+                    "Time": round(t, 2),
+                    "Latitude": round(float(lat[0]), 8),
+                    "Longitude": round(float(lon[0]), 8),
+                    "x_m": round(x, 3),
+                    "y_m": round(y, 3),
+                    "Heading (degrees Magnetic)": round(float(np.degrees(robot.heading_rad)), 4),
+                    "Thrust (% Thrust)": round(float(thrust_cmd * 100.0), 2),
+                    "Salinity (PPT)": round(
+                        float(sal) + rng.normal(0.0, noise_salinity), 4
+                    ),
+                    "Temperature (C)": round(float(tmp) + rng.normal(0.0, noise_temp), 4),
+                    "Chlorophyll (ug/L)": round(
+                        max(0.0, float(chl) + rng.normal(0.0, noise_chl)), 4
+                    ),
+                }
+            )
             t += dt_s
+            robot.step(thrust_cmd, heading, dt_s)
 
-        t += 8.0  # turning time between passes
+        # Execute northward turn to next pass (no measurements during turn)
+        if pass_idx < len(y_passes) - 1:
+            for _step in range(n_steps_turn):
+                robot.step(thrust_cmd, HDG_NORTH, dt_s)
+                t += dt_s
 
     return pd.DataFrame(rows)
 
@@ -185,24 +324,69 @@ def generate_survey(
 
 
 def main() -> None:
+    """Entry-point for the survey generator script."""
     parser = argparse.ArgumentParser(
-        description="Generate a synthetic water-feature survey log (metric units)."
+        description="Generate a synthetic Biscayne Bay survey log with GPS coordinates.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--output", default="data/raw/survey.csv")
-    parser.add_argument("--n_passes", type=int, default=8)
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--output", default="data/raw/survey.csv", help="Output CSV path."
+    )
+    parser.add_argument(
+        "--lat0",
+        type=float,
+        default=DEFAULT_LAT0,
+        help="Survey origin latitude [deg].",
+    )
+    parser.add_argument(
+        "--lon0",
+        type=float,
+        default=DEFAULT_LON0,
+        help="Survey origin longitude [deg].",
+    )
+    parser.add_argument(
+        "--n-passes", type=int, default=8, help="Number of survey lines."
+    )
+    parser.add_argument("--speed", type=float, default=1.0, help="Robot speed [m/s].")
+    parser.add_argument(
+        "--k-thrust",
+        type=float,
+        default=1.0,
+        help="Thrust-to-speed factor [m/s per unit thrust].",
+    )
+    parser.add_argument("--dt", type=float, default=1.0, help="Sampling interval [s].")
+    parser.add_argument("--seed", type=int, default=0, help="RNG seed.")
     args = parser.parse_args()
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    df = generate_survey(n_passes=args.n_passes, rng_seed=args.seed)
+    df = generate_survey(
+        lat0=args.lat0,
+        lon0=args.lon0,
+        n_passes=args.n_passes,
+        speed_mps=args.speed,
+        k_thrust=args.k_thrust,
+        dt_s=args.dt,
+        rng_seed=args.seed,
+    )
     df.to_csv(out, index=False)
 
     print(f"Wrote {len(df)} rows → {out}")
-    print(f"  Duration  : {df['t_s'].max():.1f} s")
-    print(f"  Salinity  : [{df['salinity_psu'].min():.2f}, {df['salinity_psu'].max():.2f}] PSU")
-    print(f"  Temp      : [{df['temperature_c'].min():.2f}, {df['temperature_c'].max():.2f}] °C")
+    print(f"  Origin    : ({args.lat0:.6f}°N, {args.lon0:.6f}°E)")
+    print(f"  Duration  : {df['Time'].max():.1f} s")
+    print(f"  Lat range : [{df['Latitude'].min():.6f}, {df['Latitude'].max():.6f}] °")
+    print(f"  Lon range : [{df['Longitude'].min():.6f}, {df['Longitude'].max():.6f}] °")
+    print(
+        f"  Salinity  : [{df['Salinity (PPT)'].min():.2f}, {df['Salinity (PPT)'].max():.2f}] PPT"
+    )
+    print(
+        f"  Temp      : [{df['Temperature (C)'].min():.2f}, {df['Temperature (C)'].max():.2f}] °C"
+    )
+    print(
+        f"  Chlorophyll: [{df['Chlorophyll (ug/L)'].min():.2f},"
+        f" {df['Chlorophyll (ug/L)'].max():.2f}] µg/L"
+    )
 
 
 if __name__ == "__main__":

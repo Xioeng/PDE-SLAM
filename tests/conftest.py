@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import jax
+jax.config.update("jax_enable_x64", True)
+
 import numpy as np
 import pytest
 
 from pde_slam.interpolator import SpatialGrid
+
 
 
 @pytest.fixture(scope="session")

@@ -55,7 +55,7 @@ class TestRBFInterpolation:
         """RBF with zero smoothing should near-exactly fit observation values."""
         xy, vals = _make_scattered(n=50)
         field = FieldInterpolator(
-            GRID, method="rbf", rbf_kernel="thin_plate_spline", rbf_smoothing=0.0
+            GRID, method="rbf", kernel="thin_plate_spline", smoothing=0.0
         ).fit_predict(xy, vals)
         field_np = np.array(field)
         assert field_np.min() >= vals.min() - 0.2

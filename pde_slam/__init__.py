@@ -9,18 +9,25 @@ Public API
 
 from importlib.metadata import PackageNotFoundError, version
 
+from pde_slam.coords import ENUFrame
+
 try:
     __version__: str = version("pde-slam")
 except PackageNotFoundError:
     __version__ = "0.0.0.dev"
 
 from pde_slam.interpolator import FieldInterpolator, SpatialGrid
+from pde_slam.kinematics import UnicycleKinematics
 from pde_slam.solver import AdvectionDiffusionSolver, PDEParams
+from pde_slam.survey_loader import SurveyLoader
 
 __all__: list[str] = [
     "__version__",
     "AdvectionDiffusionSolver",
+    "ENUFrame",
     "FieldInterpolator",
     "PDEParams",
     "SpatialGrid",
+    "SurveyLoader",
+    "UnicycleKinematics",
 ]

@@ -45,7 +45,6 @@ from jax import Array
 
 from pde_slam.interpolator import SpatialGrid
 
-
 # ---------------------------------------------------------------------------
 # PDE parameter container
 # ---------------------------------------------------------------------------
@@ -64,7 +63,7 @@ class PDEParams(NamedTuple):
     """
 
     u_field: Array  # shape (ny, nx, 2)
-    D: Array        # scalar
+    D: Array  # scalar
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +77,23 @@ def _laplacian_cd2(phi: Array, dx: float, dy: float) -> Array:
     d2_dx2 = (phi_p[1:-1, 2:] - 2.0 * phi_p[1:-1, 1:-1] + phi_p[1:-1, :-2]) / dx**2
     d2_dy2 = (phi_p[2:, 1:-1] - 2.0 * phi_p[1:-1, 1:-1] + phi_p[:-2, 1:-1]) / dy**2
     return d2_dx2 + d2_dy2
+
+
+def _advection_central_diff(phi: Array, u_field: Array, dx: float, dy: float) -> Array:
+    """2nd-order central-difference advection flux divergence u · ∇φ."""
+    ux = u_field[..., 0]
+    uy = u_field[..., 1]
+    phi_p = jnp.pad(phi, pad_width=1, mode="edge")
+
+    dphi_dx_fwd = (phi_p[1:-1, 2:] - phi_p[1:-1, 1:-1]) / dx
+    dphi_dx_bwd = (phi_p[1:-1, 1:-1] - phi_p[1:-1, :-2]) / dx
+    dphi_dx = (dphi_dx_fwd + dphi_dx_bwd) / 2.0
+
+    dphi_dy_fwd = (phi_p[2:, 1:-1] - phi_p[1:-1, 1:-1]) / dy
+    dphi_dy_bwd = (phi_p[1:-1, 1:-1] - phi_p[:-2, 1:-1]) / dy
+    dphi_dy = (dphi_dy_fwd + dphi_dy_bwd) / 2.0
+
+    return ux * dphi_dx + uy * dphi_dy
 
 
 def _advection_upwind(phi: Array, u_field: Array, dx: float, dy: float) -> Array:
@@ -106,7 +122,7 @@ def _pde_rhs(
 ) -> Array:
     """RHS of the advection-diffusion PDE: dφ/dt = D∇²φ − u·∇φ."""
     diffusion = pde_params.D * _laplacian_cd2(phi, dx, dy)
-    advection = _advection_upwind(phi, pde_params.u_field, dx, dy)
+    advection = _advection_central_diff(phi, pde_params.u_field, dx, dy)
     return diffusion - advection
 
 
@@ -178,9 +194,7 @@ class AdvectionDiffusionSolver:
             PDE solution at *t_end*, shape ``(ny, nx)``.
         """
         dx, dy = self.grid.dx, self.grid.dy
-        term = diffrax.ODETerm(
-            lambda t, y, _args: _pde_rhs(t, y, pde_params, dx, dy)
-        )
+        term = diffrax.ODETerm(lambda t, y, _args: _pde_rhs(t, y, pde_params, dx, dy))
         sol = diffrax.diffeqsolve(
             terms=term,
             solver=self._solver,
@@ -191,7 +205,9 @@ class AdvectionDiffusionSolver:
             stepsize_controller=diffrax.ConstantStepSize(),
             adjoint=self._adjoint,
             max_steps=int((t_end - t0) / self.dt_max) + 2,
-            saveat=diffrax.SaveAt(ts=saveat) if saveat is not None else diffrax.SaveAt(t1=True),
+            saveat=diffrax.SaveAt(ts=saveat)
+            if saveat is not None
+            else diffrax.SaveAt(t1=True),
         )
         if saveat is None:
             return sol.ys[-1]

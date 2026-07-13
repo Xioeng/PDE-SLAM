@@ -133,18 +133,14 @@ class FieldInterpolator:
         self,
         grid: SpatialGrid,
         method: Literal["rbf", "spline"] = "rbf",
-        *,
-        rbf_kernel: str = "thin_plate_spline",
-        rbf_smoothing: float = 0.0,
-        fill_value: float = 0.0,
+        **kernel_args,
     ) -> None:
         if method not in ("rbf", "spline"):
             raise ValueError(f"method must be 'rbf' or 'spline'; got {method!r}")
         self.grid = grid
         self.method = method
-        self._rbf_kernel = rbf_kernel
-        self._rbf_smoothing = rbf_smoothing
-        self._fill_value = fill_value
+
+        self._kernel_args = kernel_args
 
         self._xy_obs: np.ndarray | None = None
         self._values: np.ndarray | None = None
@@ -225,8 +221,7 @@ class FieldInterpolator:
         rbf = RBFInterpolator(
             xy_obs,
             values,
-            kernel=self._rbf_kernel,
-            smoothing=self._rbf_smoothing,
+            **self._kernel_args,
         )
         return rbf(self.grid.query_points)
 
@@ -240,4 +235,3 @@ class FieldInterpolator:
             z_nn = griddata(xy_obs, values, self.grid.query_points, method="nearest")
             z_cubic[outside] = z_nn[outside]
         return z_cubic
-
