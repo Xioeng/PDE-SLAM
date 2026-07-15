@@ -159,9 +159,7 @@ class AdvectionDiffusionSolver:
         self.grid = grid
         self.dt_max = dt_max
         self._solver = diffrax_solver if diffrax_solver is not None else diffrax.Heun()
-        self._adjoint = (
-            adjoint if adjoint is not None else diffrax.RecursiveCheckpointAdjoint()
-        )
+        self._adjoint = adjoint if adjoint is not None else diffrax.RecursiveCheckpointAdjoint()
 
     def solve(
         self,
@@ -169,7 +167,7 @@ class AdvectionDiffusionSolver:
         pde_params: PDEParams,
         t0: float,
         t_end: float,
-        saveat: list[float] | None = None,
+        saveat: list[float] | Array | None = None,
     ) -> Array:
         """Integrate the PDE forward from ``t0`` to ``t_end``.
 
@@ -204,9 +202,7 @@ class AdvectionDiffusionSolver:
             stepsize_controller=diffrax.ConstantStepSize(),
             adjoint=self._adjoint,
             max_steps=int((t_end - t0) / self.dt_max) + 2,
-            saveat=diffrax.SaveAt(ts=saveat)
-            if saveat is not None
-            else diffrax.SaveAt(t1=True),
+            saveat=diffrax.SaveAt(ts=saveat) if saveat is not None else diffrax.SaveAt(t1=True),
         )
         if saveat is None:
             return sol.ys[-1]

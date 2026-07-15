@@ -66,16 +66,8 @@ class SpatiotemporalInterpolator:
         t = jnp.asarray(t, dtype=jnp.float32)
 
         # Map physical space coordinates to continuous grid indices
-        x_idx = (
-            (x - self.grid.x_min)
-            / (self.grid.x_max - self.grid.x_min)
-            * (self.grid.nx - 1)
-        )
-        y_idx = (
-            (y - self.grid.y_min)
-            / (self.grid.y_max - self.grid.y_min)
-            * (self.grid.ny - 1)
-        )
+        x_idx = (x - self.grid.x_min) / (self.grid.x_max - self.grid.x_min) * (self.grid.nx - 1)
+        y_idx = (y - self.grid.y_min) / (self.grid.y_max - self.grid.y_min) * (self.grid.ny - 1)
 
         # Map physical time to continuous index via linear interpolation of indices
         t_xp = self.ts

@@ -1,4 +1,5 @@
 """Tests for pde_slam.solver (AdvectionDiffusionSolver class API)."""
+
 from __future__ import annotations
 
 import jax
@@ -43,6 +44,7 @@ def gaussian_field() -> jnp.ndarray:
 # Stencil helpers
 # ---------------------------------------------------------------------------
 
+
 class TestLaplacian:
     def test_uniform_field_has_zero_laplacian(self) -> None:
         phi = jnp.ones((NY, NX))
@@ -70,17 +72,22 @@ class TestAdvection:
 # Solver class
 # ---------------------------------------------------------------------------
 
+
 class TestSolverSolve:
     def test_output_shape(
-        self, solver: AdvectionDiffusionSolver,
-        flat_params: PDEParams, gaussian_field: jnp.ndarray,
+        self,
+        solver: AdvectionDiffusionSolver,
+        flat_params: PDEParams,
+        gaussian_field: jnp.ndarray,
     ) -> None:
         phi_end = solver.solve(gaussian_field, flat_params, t0=0.0, t_end=0.5)
         assert phi_end.shape == (NY, NX)
 
     def test_diffusion_reduces_peak(
-        self, solver: AdvectionDiffusionSolver,
-        flat_params: PDEParams, gaussian_field: jnp.ndarray,
+        self,
+        solver: AdvectionDiffusionSolver,
+        flat_params: PDEParams,
+        gaussian_field: jnp.ndarray,
     ) -> None:
         """Pure diffusion should reduce the peak of a Gaussian blob."""
         phi_end = solver.solve(gaussian_field, flat_params, t0=0.0, t_end=1.0)
@@ -101,10 +108,13 @@ class TestStabilityMetrics:
 
 class TestDifferentiability:
     def test_solve_is_differentiable(
-        self, solver: AdvectionDiffusionSolver,
-        flat_params: PDEParams, gaussian_field: jnp.ndarray,
+        self,
+        solver: AdvectionDiffusionSolver,
+        flat_params: PDEParams,
+        gaussian_field: jnp.ndarray,
     ) -> None:
         """JAX must be able to differentiate through solver.solve()."""
+
         def loss(p: PDEParams) -> jnp.ndarray:
             phi = solver.solve(gaussian_field, p, t0=0.0, t_end=0.5)
             return jnp.mean(phi**2)

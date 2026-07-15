@@ -104,9 +104,7 @@ class ENUFrame:
         north_m = (lat - self.lat0) * self._m_per_deg_north
         return east_m, north_m
 
-    def to_enu_xy(
-        self, lat: np.ndarray | Array, lon: np.ndarray | Array
-    ) -> np.ndarray:
+    def to_enu_xy(self, lat: np.ndarray | Array, lon: np.ndarray | Array) -> np.ndarray:
         """Convert geodetic coordinates to a stacked ``(N, 2)`` ENU array.
 
         Convenience wrapper around :meth:`to_enu` that produces the column

@@ -1,4 +1,5 @@
 """Tests for pde_slam.interpolator (FieldInterpolator class API)."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -21,6 +22,7 @@ def _make_scattered(n: int = 80, seed: int = 0) -> tuple[np.ndarray, np.ndarray]
 # SpatialGrid
 # ---------------------------------------------------------------------------
 
+
 class TestSpatialGrid:
     def test_shape(self) -> None:
         assert GRID.shape == (20, 20)
@@ -39,6 +41,7 @@ class TestSpatialGrid:
 # FieldInterpolator – RBF backend
 # ---------------------------------------------------------------------------
 
+
 class TestRBFInterpolation:
     def test_output_shape(self) -> None:
         xy, vals = _make_scattered()
@@ -47,6 +50,7 @@ class TestRBFInterpolation:
 
     def test_output_finite(self) -> None:
         import jax.numpy as jnp
+
         xy, vals = _make_scattered()
         field = FieldInterpolator(GRID, method="rbf").fit_predict(xy, vals)
         assert bool(jnp.all(jnp.isfinite(field)))
@@ -79,6 +83,7 @@ class TestRBFInterpolation:
 # FieldInterpolator – Spline backend
 # ---------------------------------------------------------------------------
 
+
 class TestSplineInterpolation:
     def test_output_shape(self) -> None:
         xy, vals = _make_scattered(n=80)
@@ -95,13 +100,14 @@ class TestSplineInterpolation:
 # Invalid constructor
 # ---------------------------------------------------------------------------
 
+
 class TestConstructorValidation:
     def test_invalid_method_raises(self) -> None:
         with pytest.raises(ValueError, match="method must be"):
             FieldInterpolator(GRID, method="kriging")  # type: ignore[arg-type]
 
     def test_bad_xy_shape_raises(self) -> None:
-        xy = np.random.randn(10, 3)   # wrong second dimension
+        xy = np.random.randn(10, 3)  # wrong second dimension
         vals = np.ones(10)
         with pytest.raises(ValueError, match="shape"):
             FieldInterpolator(GRID).fit(xy, vals)
@@ -111,10 +117,12 @@ class TestConstructorValidation:
 # SpatiotemporalInterpolator
 # ---------------------------------------------------------------------------
 
+
 class TestSpatiotemporalInterpolator:
     def test_spatiotemporal_interpolation(self) -> None:
         import jax
         import jax.numpy as jnp
+
         from pde_slam.interpolator import SpatiotemporalInterpolator
 
         # Create a simple 3x3 grid
@@ -123,9 +131,7 @@ class TestSpatiotemporalInterpolator:
 
         # Create snapshots: f(x, y, t) = x + y + t
         # grid.XX has shape (ny, nx) -> XX[y, x]
-        t_grid, y_grid, x_grid = jnp.meshgrid(
-            ts, grid.YY[:, 0], grid.XX[0, :], indexing="ij"
-        )
+        t_grid, y_grid, x_grid = jnp.meshgrid(ts, grid.YY[:, 0], grid.XX[0, :], indexing="ij")
         snapshots = x_grid + y_grid + t_grid  # shape (3, 3, 3)
 
         interp = SpatiotemporalInterpolator(grid, ts, snapshots)
@@ -152,5 +158,3 @@ class TestSpatiotemporalInterpolator:
         grad_snaps = jax.grad(loss)(snapshots)
         assert grad_snaps.shape == snapshots.shape
         assert float(jnp.sum(grad_snaps)) == pytest.approx(1.0, abs=1e-5)
-
-

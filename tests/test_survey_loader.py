@@ -177,8 +177,8 @@ class TestENUConversion:
         csv = tmp_path / "dir.csv"
         csv.write_text(content)
         loader = SurveyLoader(frame).load(csv)
-        assert loader.xy_obs[1, 1] > 0   # north of origin → positive northing
-        assert loader.xy_obs[2, 1] < 0   # south → negative
+        assert loader.xy_obs[1, 1] > 0  # north of origin → positive northing
+        assert loader.xy_obs[2, 1] < 0  # south → negative
 
 
 # ---------------------------------------------------------------------------

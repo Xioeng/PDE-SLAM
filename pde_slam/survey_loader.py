@@ -207,9 +207,7 @@ class SurveyLoader:
         df = df.dropna(subset=[*coord_cols, self.field]).reset_index(drop=True)
 
         if len(df) < 4:
-            raise ValueError(
-                f"Only {len(df)} valid rows after dropping NaNs — need ≥ 4."
-            )
+            raise ValueError(f"Only {len(df)} valid rows after dropping NaNs — need ≥ 4.")
 
         vals = df[self.field].to_numpy(dtype=np.float64)
 
@@ -363,9 +361,7 @@ class SurveyLoader:
         assert self._df is not None
         for f in fields[1:]:
             if f not in self._df.columns:
-                raise KeyError(
-                    f"Field '{f}' not found in CSV columns: {list(self._df.columns)}"
-                )
+                raise KeyError(f"Field '{f}' not found in CSV columns: {list(self._df.columns)}")
             vals = self._df[f].to_numpy(dtype=np.float64)
             result[f] = vals
 
@@ -397,8 +393,7 @@ class SurveyLoader:
         missing = [col for col in (*coord_cols, self.field) if col not in df.columns]
         if missing:
             raise KeyError(
-                f"Required column(s) not found in CSV: {missing}. "
-                f"Available: {list(df.columns)}"
+                f"Required column(s) not found in CSV: {missing}. Available: {list(df.columns)}"
             )
 
     def _check_loaded(self) -> None:

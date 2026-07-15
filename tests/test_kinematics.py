@@ -5,8 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pde_slam.kinematics import UnicycleKinematics
-
+from pde_slam.kinematics import BaseKinematics, UnicycleKinematics
 
 # ---------------------------------------------------------------------------
 # Single step — cardinal directions
@@ -217,3 +216,21 @@ class TestWaypointFollowing:
         with pytest.raises(ValueError, match="speed_mps / k_thrust"):
             robot.drive_to_waypoints(np.array([[10.0, 10.0]]), speed_mps=2.0, dt=1.0)
 
+
+# ---------------------------------------------------------------------------
+# BaseKinematics behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestBaseKinematics:
+    """Unit tests for the BaseKinematics abstract class behavior."""
+
+    def test_cannot_instantiate_base_class(self) -> None:
+        """Attempting to instantiate BaseKinematics directly raises TypeError."""
+        with pytest.raises(TypeError, match="Can't instantiate abstract class"):
+            BaseKinematics()  # type: ignore[abstract]
+
+    def test_unicycle_inherits_base_kinematics(self) -> None:
+        """UnicycleKinematics correctly inherits from BaseKinematics."""
+        robot = UnicycleKinematics(k_thrust=1.0)
+        assert isinstance(robot, BaseKinematics)

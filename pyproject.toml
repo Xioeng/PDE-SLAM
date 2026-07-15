@@ -9,7 +9,7 @@ description = "Aquatic SLAM constrained by advection-diffusion PDE for water fea
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.12"
-authors = [{ name = "PDE-SLAM Contributors" }]
+authors = [{ name = "Jose Fuentes" }]
 keywords = ["slam", "pde", "jax", "fluid-dynamics", "robotics", "marine"]
 
 dependencies = [
