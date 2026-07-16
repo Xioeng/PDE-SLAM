@@ -2,7 +2,7 @@
 survey_loader.py
 ================
 Load a survey CSV, project observations to local ENU metres, and prepare
-(xy, values) arrays ready for :class:`~pde_slam.interpolator.FieldInterpolator`.
+(xy, values) arrays ready for :class:`~pde_slam.interpolators.FieldInterpolator`.
 
 The loader is intentionally thin: it handles I/O and unit conversion only.
 Interpolation and solving remain the responsibility of their own classes so
@@ -22,7 +22,7 @@ Typical usage — lat/lon CSV
 ::
 
     from pde_slam.coords import ENUFrame
-    from pde_slam.interpolator import FieldInterpolator, SpatialGrid
+    from pde_slam.interpolators import FieldInterpolator, SpatialGrid
     from pde_slam.survey_loader import SurveyLoader
 
     frame  = ENUFrame(lat0=36.7996, lon0=-76.0000)
@@ -56,7 +56,7 @@ import pandas as pd
 from jax import Array
 
 from pde_slam.coords import ENUFrame
-from pde_slam.interpolator import FieldInterpolator, SpatialGrid
+from pde_slam.interpolators import FieldInterpolator, SpatialGrid
 
 # Columns that identify *navigation* data — excluded from the list of
 # available scalar fields.
@@ -295,13 +295,13 @@ class SurveyLoader:
     ) -> Array:
         """Interpolate the loaded observations onto *grid*.
 
-        Combines :meth:`load` data with :class:`~pde_slam.interpolator.FieldInterpolator`
+        Combines :meth:`load` data with :class:`~pde_slam.interpolators.FieldInterpolator`
         to produce a JAX array suitable as ``phi0`` for the PDE solver.
 
         Parameters
         ----------
         grid :
-            Target :class:`~pde_slam.interpolator.SpatialGrid`.
+            Target :class:`~pde_slam.interpolators.SpatialGrid`.
         method :
             Interpolation backend: ``"rbf"`` (default) or ``"spline"``.
         rbf_kernel :
@@ -335,7 +335,7 @@ class SurveyLoader:
     ) -> dict[str, np.ndarray]:
         """Load multiple scalar fields from *csv_path* into ENU-projected arrays.
 
-        This does **not** call :class:`~pde_slam.interpolator.FieldInterpolator`;
+        This does **not** call :class:`~pde_slam.interpolators.FieldInterpolator`;
         it returns raw ``(N,)`` value arrays so the caller controls interpolation.
 
         Parameters

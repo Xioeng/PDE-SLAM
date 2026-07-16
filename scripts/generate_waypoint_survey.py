@@ -61,9 +61,7 @@ CHL_AMBIENT = 0.5
 CHL_PLUME_PEAK = 5.0
 
 
-def _plume_salinity(
-    x: np.ndarray, y: np.ndarray, plume_sources: np.ndarray
-) -> np.ndarray:
+def _plume_salinity(x: np.ndarray, y: np.ndarray, plume_sources: np.ndarray) -> np.ndarray:
     total_freshness = np.zeros_like(x)
     for px, py in plume_sources:
         plume_dir = np.array([1.0, 1.0]) / np.sqrt(2.0)
@@ -73,9 +71,7 @@ def _plume_salinity(
         cross = -dx * plume_dir[1] + dy * plume_dir[0]
         along_clamped = np.maximum(along, 0.0)
         width = PLUME_WIDTH + 0.15 * along_clamped
-        freshness = np.exp(-0.5 * (cross / width) ** 2) * np.exp(
-            -PLUME_DECAY * along_clamped
-        )
+        freshness = np.exp(-0.5 * (cross / width) ** 2) * np.exp(-PLUME_DECAY * along_clamped)
         total_freshness = np.maximum(total_freshness, freshness)
 
     sal = AMBIENT_SALINITY - (AMBIENT_SALINITY - FRESH_SALINITY) * total_freshness
@@ -88,9 +84,7 @@ def _plume_salinity(
     return sal
 
 
-def _front_temperature(
-    x: np.ndarray, y: np.ndarray, plume_sources: np.ndarray
-) -> np.ndarray:
+def _front_temperature(x: np.ndarray, y: np.ndarray, plume_sources: np.ndarray) -> np.ndarray:
     # Base temperature from front
     temp = AMBIENT_TEMP + (INTRUSION_TEMP - AMBIENT_TEMP) / (
         1.0 + np.exp((x - FRONT_X) / FRONT_WIDTH)
@@ -102,9 +96,7 @@ def _front_temperature(
     return temp
 
 
-def _plume_chlorophyll(
-    x: np.ndarray, y: np.ndarray, plume_sources: np.ndarray
-) -> np.ndarray:
+def _plume_chlorophyll(x: np.ndarray, y: np.ndarray, plume_sources: np.ndarray) -> np.ndarray:
     total_bloom = np.zeros_like(x)
     for px, py in plume_sources:
         plume_dir = np.array([1.0, 1.0]) / np.sqrt(2.0)
@@ -126,7 +118,6 @@ def _plume_chlorophyll(
         chl += 2.0 * np.exp(-0.5 * (((x - px) ** 2 + (y - py) ** 2) / (30.0**2)))
 
     return chl
-
 
 
 def get_random_points_in_polygon(
@@ -175,9 +166,7 @@ def get_random_points_in_polygon(
     return np.array(points)
 
 
-def load_polygon(
-    polygon_path: str | None, frame: ENUFrame
-) -> tuple[np.ndarray, np.ndarray]:
+def load_polygon(polygon_path: str | None, frame: ENUFrame) -> tuple[np.ndarray, np.ndarray]:
     """Load boundary polygon vertices in GPS coordinates."""
     if polygon_path is not None:
         path = Path(polygon_path)
@@ -194,9 +183,7 @@ def load_polygon(
             lats, lons = frame.from_enu(xs, ys)
             return lats, lons
         else:
-            raise KeyError(
-                "Polygon CSV must contain ['latitude', 'longitude'] or ['x_m', 'y_m']"
-            )
+            raise KeyError("Polygon CSV must contain ['latitude', 'longitude'] or ['x_m', 'y_m']")
 
     # Default square boundary: 500m x 500m centered around origin
     x_corners = np.array([-250.0, -250.0, 250.0, 250.0, -250.0])
@@ -205,9 +192,7 @@ def load_polygon(
     return lats, lons
 
 
-def select_waypoints_gui(
-    lats: np.ndarray, lons: np.ndarray
-) -> list[tuple[float, float]]:
+def select_waypoints_gui(lats: np.ndarray, lons: np.ndarray) -> list[tuple[float, float]]:
     """Open GUI window to select waypoints by clicking."""
     print("\n------------------------------------------------------------")
     print("Opening interactive map window...")
@@ -265,19 +250,11 @@ def main() -> None:
         description="Generate survey log by defining waypoints interactively.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument(
-        "--output", default="data/raw/waypoint_survey.csv", help="Output CSV path."
-    )
-    parser.add_argument(
-        "--lat0", type=float, default=DEFAULT_LAT0, help="ENU origin latitude."
-    )
-    parser.add_argument(
-        "--lon0", type=float, default=DEFAULT_LON0, help="ENU origin longitude."
-    )
+    parser.add_argument("--output", default="data/raw/waypoint_survey.csv", help="Output CSV path.")
+    parser.add_argument("--lat0", type=float, default=DEFAULT_LAT0, help="ENU origin latitude.")
+    parser.add_argument("--lon0", type=float, default=DEFAULT_LON0, help="ENU origin longitude.")
     parser.add_argument("--speed", type=float, default=1.0, help="Robot speed [m/s].")
-    parser.add_argument(
-        "--k-thrust", type=float, default=1.0, help="Thrust-to-speed factor."
-    )
+    parser.add_argument("--k-thrust", type=float, default=1.0, help="Thrust-to-speed factor.")
     parser.add_argument("--dt", type=float, default=1.0, help="Time step [s].")
     parser.add_argument(
         "--acceptance-radius", type=float, default=10.0, help="Waypoint acceptance [m]."
@@ -317,9 +294,7 @@ def main() -> None:
             pts = select_waypoints_gui(lats_poly, lons_poly)
         except Exception as e:
             print(f"\nWarning: Could not open GUI window due to: {e}")
-            print(
-                "Falling back to headless input. Please enter waypoints at the prompt."
-            )
+            print("Falling back to headless input. Please enter waypoints at the prompt.")
             print("Format: lat,lon; lat,lon; ... (e.g. 25.909,-80.136; 25.910,-80.135)")
             user_input = input("Enter waypoints: ")
             pts = parse_waypoints_cli(user_input)
@@ -381,12 +356,10 @@ def main() -> None:
                 "x_m": round(float(x), 3),
                 "y_m": round(float(y), 3),
                 "Heading (degrees Magnetic)": round(float(np.degrees(heading_val)), 4),
-                "Thrust (% Thrust)": round(float(thrust_val * 100.0), 2),
+                "Thrust (% Thrust)": round(float(thrust_val), 2),
                 "Salinity (PPT)": round(float(sal) + rng.normal(0.0, 0.05), 4),
                 "Temperature (C)": round(float(tmp) + rng.normal(0.0, 0.05), 4),
-                "Chlorophyll (ug/L)": round(
-                    max(0.0, float(chl) + rng.normal(0.0, 0.03)), 4
-                ),
+                "Chlorophyll (ug/L)": round(max(0.0, float(chl) + rng.normal(0.0, 0.03)), 4),
             }
         )
         t += args.dt
@@ -401,9 +374,7 @@ def main() -> None:
     print(f"  Duration  : {df['Time'].max():.1f} s")
     print(f"  Lat range : [{df['Latitude'].min():.6f}, {df['Latitude'].max():.6f}] °")
     print(f"  Lon range : [{df['Longitude'].min():.6f}, {df['Longitude'].max():.6f}] °")
-    print(
-        f"  Salinity  : [{df['Salinity (PPT)'].min():.2f}, {df['Salinity (PPT)'].max():.2f}] PPT"
-    )
+    print(f"  Salinity  : [{df['Salinity (PPT)'].min():.2f}, {df['Salinity (PPT)'].max():.2f}] PPT")
     print(
         f"  Temp      : [{df['Temperature (C)'].min():.2f}, {df['Temperature (C)'].max():.2f}] °C"
     )

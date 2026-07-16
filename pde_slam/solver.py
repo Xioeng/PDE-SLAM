@@ -25,7 +25,7 @@ Usage
 -----
 ::
 
-    from pde_slam.interpolator import SpatialGrid
+    from pde_slam.interpolators import SpatialGrid
     from pde_slam.solver import AdvectionDiffusionSolver, PDEParams
 
     grid  = SpatialGrid(0, 500, 0, 500, nx=64, ny=64)
@@ -42,7 +42,7 @@ import diffrax
 import jax.numpy as jnp
 from jax import Array
 
-from pde_slam.interpolator import SpatialGrid
+from pde_slam.interpolators import SpatialGrid
 
 # ---------------------------------------------------------------------------
 # PDE parameter container
@@ -136,7 +136,7 @@ class AdvectionDiffusionSolver:
     Parameters
     ----------
     grid :
-        :class:`~pde_slam.interpolator.SpatialGrid` that defines the spatial
+        :class:`~pde_slam.interpolators.SpatialGrid` that defines the spatial
         domain and grid spacings ``dx``, ``dy``.
     dt_max :
         Maximum integration step size [s].

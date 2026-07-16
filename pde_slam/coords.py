@@ -108,7 +108,7 @@ class ENUFrame:
         """Convert geodetic coordinates to a stacked ``(N, 2)`` ENU array.
 
         Convenience wrapper around :meth:`to_enu` that produces the column
-        layout expected by :class:`~pde_slam.interpolator.FieldInterpolator`.
+        layout expected by :class:`~pde_slam.interpolators.FieldInterpolator`.
 
         Parameters
         ----------

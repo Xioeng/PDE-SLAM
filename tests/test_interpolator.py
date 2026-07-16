@@ -1,11 +1,11 @@
-"""Tests for pde_slam.interpolator (FieldInterpolator class API)."""
+"""Tests for pde_slam.interpolators (FieldInterpolator class API)."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from pde_slam.interpolator import FieldInterpolator, SpatialGrid
+from pde_slam.interpolators import FieldInterpolator, SpatialGrid
 
 GRID = SpatialGrid(x_min=-50.0, x_max=50.0, y_min=-50.0, y_max=50.0, nx=20, ny=20)
 
@@ -123,7 +123,7 @@ class TestSpatiotemporalInterpolator:
         import jax
         import jax.numpy as jnp
 
-        from pde_slam.interpolator import SpatiotemporalInterpolator
+        from pde_slam.interpolators import SpatiotemporalInterpolator
 
         # Create a simple 3x3 grid
         grid = SpatialGrid(x_min=0.0, x_max=2.0, y_min=0.0, y_max=2.0, nx=3, ny=3)

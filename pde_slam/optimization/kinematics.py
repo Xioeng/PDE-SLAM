@@ -1,6 +1,6 @@
 """
-optimization.py
-===============
+kinematics.py
+=============
 JAX-based parameter identification for robot kinematic models.
 
 This module provides tools to estimate kinematic parameters (e.g., thrust-to-speed
@@ -276,35 +276,7 @@ class KinematicsOptimizer:
         bounds: dict[str, tuple[float | None, float | None]] | None,
         options: dict[str, Any] | None,
     ) -> tuple[dict[str, float], dict[str, Any]]:
-        """Fit parameters using SciPy L-BFGS-B with JAX gradients.
-
-        Parameters
-        ----------
-        x0_jax : Array
-            Initial position.
-        thrusts_jax : Array
-            Thrust inputs.
-        headings_jax : Array
-            Heading inputs [rad].
-        dt_jax : float or Array
-            Time step [s].
-        coords_obs_jax : Array
-            Observed coordinates.
-        init_params : dict of str to float or Array
-            Initial guess parameters.
-        bounds : dict of str to tuple, optional
-            Parameter bounds.
-        options : dict, optional
-            SciPy minimize options.
-
-        Returns
-        -------
-        best_params : dict of str to float
-            Optimized parameter values.
-        info : dict of str to Any
-            Metadata about the optimization.
-        """
-        # L-BFGS-B implementation using SciPy and JAX
+        """Fit parameters using SciPy L-BFGS-B with JAX gradients."""
         theta_init, shapes = _pack_params(init_params)
 
         # Build bounds list matching the packed array structure
@@ -365,34 +337,7 @@ class KinematicsOptimizer:
         method: str,
         options: dict[str, Any] | None,
     ) -> tuple[dict[str, float], dict[str, Any]]:
-        """Fit parameters using Optax gradient descent.
-
-        Parameters
-        ----------
-        x0_jax : Array
-            Initial position.
-        thrusts_jax : Array
-            Thrust inputs.
-        headings_jax : Array
-            Heading inputs [rad].
-        dt_jax : float or Array
-            Time step [s].
-        coords_obs_jax : Array
-            Observed coordinates.
-        init_params : dict of str to float or Array
-            Initial guess parameters.
-        method : {'adam', 'sgd'}
-            Optax optimizer name.
-        options : dict, optional
-            Dictionary containing 'learning_rate' (default 1e-2) and 'num_steps' (default 200).
-
-        Returns
-        -------
-        best_params : dict of str to float
-            Optimized parameter values.
-        info : dict of str to Any
-            Metadata about the optimization.
-        """
+        """Fit parameters using Optax gradient descent."""
         opt_options = options or {}
         lr = float(opt_options.get("learning_rate", 1e-2))
         num_steps = int(opt_options.get("num_steps", 200))

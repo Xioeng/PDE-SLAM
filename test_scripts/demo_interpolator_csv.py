@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from pde_slam.coords import ENUFrame
-from pde_slam.interpolator import FieldInterpolator, SpatialGrid
+from pde_slam.interpolators import FieldInterpolator, SpatialGrid
 from pde_slam.survey_loader import SurveyLoader
 
 # ---------------------------------------------------------------------------
@@ -34,24 +34,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("csv_path", type=Path, help="Path to the survey CSV file.")
-    parser.add_argument(
-        "--lat0", type=float, required=True, help="ENU origin latitude [deg]."
-    )
-    parser.add_argument(
-        "--lon0", type=float, required=True, help="ENU origin longitude [deg]."
-    )
+    parser.add_argument("--lat0", type=float, required=True, help="ENU origin latitude [deg].")
+    parser.add_argument("--lon0", type=float, required=True, help="ENU origin longitude [deg].")
     parser.add_argument(
         "--field",
         type=str,
         default="Temperature (C)",
         help="Scalar field column to interpolate.",
     )
-    parser.add_argument(
-        "--nx", type=int, default=80, help="Grid points in East direction."
-    )
-    parser.add_argument(
-        "--ny", type=int, default=80, help="Grid points in North direction."
-    )
+    parser.add_argument("--nx", type=int, default=80, help="Grid points in East direction.")
+    parser.add_argument("--ny", type=int, default=80, help="Grid points in North direction.")
     parser.add_argument(
         "--method",
         type=str,
@@ -137,9 +129,7 @@ def main(argv: list[str] | None = None) -> None:
     interp = FieldInterpolator(grid, method=args.method, **kwargs)
     grid_field = interp.fit_predict(xy, vals)
 
-    print(
-        f"  Grid field range: [{float(grid_field.min()):.4f}, {float(grid_field.max()):.4f}]"
-    )
+    print(f"  Grid field range: [{float(grid_field.min()):.4f}, {float(grid_field.max()):.4f}]")
 
     # 3. Plotting
     print("\n[3/3] Plotting results …")

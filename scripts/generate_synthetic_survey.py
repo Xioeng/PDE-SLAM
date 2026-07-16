@@ -114,9 +114,7 @@ def _plume_salinity(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
     along_clamped = np.maximum(along, 0.0)
     width = PLUME_WIDTH + 0.15 * along_clamped
-    freshness = np.exp(-0.5 * (cross / width) ** 2) * np.exp(
-        -PLUME_DECAY * along_clamped
-    )
+    freshness = np.exp(-0.5 * (cross / width) ** 2) * np.exp(-PLUME_DECAY * along_clamped)
     return AMBIENT_SALINITY - (AMBIENT_SALINITY - FRESH_SALINITY) * freshness
 
 
@@ -215,7 +213,7 @@ def generate_survey(
         Sampling / integration interval [s].
     k_thrust :
         Thrust-to-speed factor [m s⁻¹ per unit thrust].  The constant thrust
-        command is ``speed_mps / k_thrust`` and must be ≤ 1.
+        command is ``(speed_mps / k_thrust) * 100.0`` and must be ≤ 100.
     noise_salinity :
         Gaussian sensor noise standard deviation for salinity [PSU].
     noise_temp :
@@ -235,12 +233,12 @@ def generate_survey(
     Raises
     ------
     ValueError
-        If ``speed_mps / k_thrust > 1``.
+        If ``speed_mps / k_thrust > 1.0``.
     """
-    thrust_cmd = speed_mps / k_thrust
-    if thrust_cmd > 1.0:
+    thrust_cmd = (speed_mps / k_thrust) * 100.0
+    if thrust_cmd > 100.0:
         raise ValueError(
-            f"speed_mps / k_thrust = {thrust_cmd:.3f} > 1.0 — "
+            f"speed_mps / k_thrust = {speed_mps / k_thrust:.3f} > 1.0 — "
             "reduce speed_mps or increase k_thrust."
         )
 
@@ -296,10 +294,8 @@ def generate_survey(
                     "x_m": round(x, 3),
                     "y_m": round(y, 3),
                     "Heading (degrees Magnetic)": round(float(np.degrees(robot.heading_rad)), 4),
-                    "Thrust (% Thrust)": round(float(thrust_cmd * 100.0), 2),
-                    "Salinity (PPT)": round(
-                        float(sal) + rng.normal(0.0, noise_salinity), 4
-                    ),
+                    "Thrust (% Thrust)": round(float(thrust_cmd), 2),
+                    "Salinity (PPT)": round(float(sal) + rng.normal(0.0, noise_salinity), 4),
                     "Temperature (C)": round(float(tmp) + rng.normal(0.0, noise_temp), 4),
                     "Chlorophyll (ug/L)": round(
                         max(0.0, float(chl) + rng.normal(0.0, noise_chl)), 4
@@ -329,9 +325,7 @@ def main() -> None:
         description="Generate a synthetic Biscayne Bay survey log with GPS coordinates.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument(
-        "--output", default="data/raw/survey.csv", help="Output CSV path."
-    )
+    parser.add_argument("--output", default="data/raw/survey.csv", help="Output CSV path.")
     parser.add_argument(
         "--lat0",
         type=float,
@@ -344,9 +338,7 @@ def main() -> None:
         default=DEFAULT_LON0,
         help="Survey origin longitude [deg].",
     )
-    parser.add_argument(
-        "--n-passes", type=int, default=8, help="Number of survey lines."
-    )
+    parser.add_argument("--n-passes", type=int, default=8, help="Number of survey lines.")
     parser.add_argument("--speed", type=float, default=1.0, help="Robot speed [m/s].")
     parser.add_argument(
         "--k-thrust",
@@ -377,9 +369,7 @@ def main() -> None:
     print(f"  Duration  : {df['Time'].max():.1f} s")
     print(f"  Lat range : [{df['Latitude'].min():.6f}, {df['Latitude'].max():.6f}] °")
     print(f"  Lon range : [{df['Longitude'].min():.6f}, {df['Longitude'].max():.6f}] °")
-    print(
-        f"  Salinity  : [{df['Salinity (PPT)'].min():.2f}, {df['Salinity (PPT)'].max():.2f}] PPT"
-    )
+    print(f"  Salinity  : [{df['Salinity (PPT)'].min():.2f}, {df['Salinity (PPT)'].max():.2f}] PPT")
     print(
         f"  Temp      : [{df['Temperature (C)'].min():.2f}, {df['Temperature (C)'].max():.2f}] °C"
     )

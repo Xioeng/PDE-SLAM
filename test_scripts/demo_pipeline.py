@@ -37,7 +37,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from pde_slam.coords import ENUFrame
-from pde_slam.interpolator import FieldInterpolator, SpatialGrid
+from pde_slam.interpolators import FieldInterpolator, SpatialGrid
 from pde_slam.solver import AdvectionDiffusionSolver, PDEParams
 from pde_slam.survey_loader import SurveyLoader
 
@@ -52,24 +52,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("csv_path", type=Path, help="Path to the survey CSV file.")
-    parser.add_argument(
-        "--lat0", type=float, required=True, help="ENU origin latitude [deg]."
-    )
-    parser.add_argument(
-        "--lon0", type=float, required=True, help="ENU origin longitude [deg]."
-    )
-    parser.add_argument(
-        "--field", default="Salinity (PPT)", help="Scalar field column to use."
-    )
-    parser.add_argument(
-        "--nx", type=int, default=64, help="Grid points in East direction."
-    )
-    parser.add_argument(
-        "--ny", type=int, default=64, help="Grid points in North direction."
-    )
-    parser.add_argument(
-        "--t-end", type=float, default=300.0, help="PDE solve end time [s]."
-    )
+    parser.add_argument("--lat0", type=float, required=True, help="ENU origin latitude [deg].")
+    parser.add_argument("--lon0", type=float, required=True, help="ENU origin longitude [deg].")
+    parser.add_argument("--field", default="Salinity (PPT)", help="Scalar field column to use.")
+    parser.add_argument("--nx", type=int, default=64, help="Grid points in East direction.")
+    parser.add_argument("--ny", type=int, default=64, help="Grid points in North direction.")
+    parser.add_argument("--t-end", type=float, default=300.0, help="PDE solve end time [s].")
     parser.add_argument(
         "--method",
         choices=["rbf", "spline"],
@@ -211,9 +199,7 @@ def step_plot(
     )
 
     for i, (ax, snap, t) in enumerate(zip(axes, snapshots, t_snaps, strict=True)):
-        im = ax.imshow(
-            np.array(snap), origin="lower", extent=ext, vmin=vmin, vmax=vmax, cmap=cmap
-        )
+        im = ax.imshow(np.array(snap), origin="lower", extent=ext, vmin=vmin, vmax=vmax, cmap=cmap)
         ax.set_title(f"t = {int(t)} s")
         ax.set_xlabel("East [m]")
         if i == 0:

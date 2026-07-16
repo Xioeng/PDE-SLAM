@@ -94,7 +94,7 @@ class UnicycleKinematics(BaseKinematics):
         Parameters
         ----------
         thrust :
-            Dimensionless thrust command in ``[0, 1]``.
+            Dimensionless thrust command in ``[0, 100]``.
         compass_heading_rad :
             Compass heading reading [rad, navigation convention:
             0 = North, π/2 = East, clockwise positive].
@@ -106,7 +106,7 @@ class UnicycleKinematics(BaseKinematics):
         state :
             Updated state ``[x_m, y_m, heading_rad]``, shape ``(3,)``.
         """
-        speed = self.k_thrust * float(thrust)
+        speed = self.k_thrust * (float(thrust) / 100.0)
         psi = float(compass_heading_rad)
         dx = speed * jnp.sin(psi) * float(dt)
         dy = speed * jnp.cos(psi) * float(dt)
@@ -151,7 +151,7 @@ class UnicycleKinematics(BaseKinematics):
             the elements are [x_m, y_m, heading_rad]. If shape is (2,), the elements
             are [x_m, y_m].
         thrusts : Array
-            1-D array of thrust commands, length N.
+            1-D array of thrust commands in ``[0, 100]``, length N.
         headings : Array
             1-D array of compass headings [rad, navigation convention], length N.
         dt : float or Array
@@ -181,7 +181,7 @@ class UnicycleKinematics(BaseKinematics):
         if include_initial:
             states = states.at[0].set(x0)
 
-        speeds = k_thrust * thrusts_arr
+        speeds = k_thrust * thrusts_arr / 100.0
         dx = speeds * jnp.sin(headings_arr) * dt
         dy = speeds * jnp.cos(headings_arr) * dt
 
@@ -209,7 +209,7 @@ class UnicycleKinematics(BaseKinematics):
         Parameters
         ----------
         thrusts :
-            1-D array of thrust commands, length N.
+            1-D array of thrust commands in ``[0, 100]``, length N.
         headings :
             1-D array of compass headings [rad, navigation convention], length N.
         dt :
@@ -283,7 +283,7 @@ class UnicycleKinematics(BaseKinematics):
             Integrated states ``[x_m, y_m, heading_rad]`` at each step (including initial),
             shape ``(N + 1, 3)``.
         thrusts :
-            Thrust commands applied at each step, shape ``(N,)``.
+            Thrust commands in ``[0, 100]`` applied at each step, shape ``(N,)``.
         headings :
             Compass headings applied at each step [rad], shape ``(N,)``.
         """
@@ -293,10 +293,10 @@ class UnicycleKinematics(BaseKinematics):
         if len(waypoints) == 0:
             raise ValueError("waypoints must not be empty")
 
-        thrust_cmd = speed_mps / self.k_thrust
-        if thrust_cmd > 1.0:
+        thrust_cmd = (speed_mps / self.k_thrust) * 100.0
+        if thrust_cmd > 100.0:
             raise ValueError(
-                f"speed_mps / k_thrust = {thrust_cmd:.3f} > 1.0 — "
+                f"speed_mps / k_thrust = {speed_mps / self.k_thrust:.3f} > 1.0 — "
                 "increase k_thrust or reduce speed_mps."
             )
 

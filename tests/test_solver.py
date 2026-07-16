@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from pde_slam.interpolator import SpatialGrid
+from pde_slam.interpolators import SpatialGrid
 from pde_slam.solver import (
     AdvectionDiffusionSolver,
     PDEParams,

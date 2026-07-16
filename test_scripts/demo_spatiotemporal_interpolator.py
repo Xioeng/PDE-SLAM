@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pde_slam.interpolator import SpatialGrid, SpatiotemporalInterpolator
+from pde_slam.interpolators import SpatialGrid, SpatiotemporalInterpolator
 from pde_slam.solver import AdvectionDiffusionSolver, PDEParams
 
 # ---------------------------------------------------------------------------

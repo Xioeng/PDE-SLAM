@@ -56,7 +56,7 @@ def main() -> None:
 
     # Create smooth time-varying control inputs
     times = np.linspace(0.0, t_max, n_steps)
-    thrusts = 0.5 + 0.3 * np.sin(2 * np.pi * times / 20.0)
+    thrusts = 50.0 + 30.0 * np.sin(2 * np.pi * times / 20.0)
     headings = 0.5 * np.cos(2 * np.pi * times / 30.0)
 
     # Generate ground truth trajectory
@@ -66,20 +66,14 @@ def main() -> None:
     # Add Gaussian noise to coordinates to simulate measurement noise (e.g. GPS noise)
     np.random.seed(42)
     noise_std = 0.25  # [meters]
-    coords_noisy = coords_true + np.random.normal(
-        0.0, noise_std, size=coords_true.shape
-    )
+    coords_noisy = coords_true + np.random.normal(0.0, noise_std, size=coords_true.shape)
 
     # ---------------------------------------------------------------------------
     # 2. Setup initial guess & baseline trajectory
     # ---------------------------------------------------------------------------
     k_thrust_init = 4.0  # Wrong k_thrust parameter
-    robot_guess = UnicycleKinematics(
-        k_thrust=k_thrust_init, x0=x0, y0=y0, heading0=heading0
-    )
-    states_guess = robot_guess.trajectory(
-        thrusts, headings, dt=dt, include_initial=True
-    )
+    robot_guess = UnicycleKinematics(k_thrust=k_thrust_init, x0=x0, y0=y0, heading0=heading0)
+    states_guess = robot_guess.trajectory(thrusts, headings, dt=dt, include_initial=True)
     coords_guess = states_guess[:, :2]
 
     # ---------------------------------------------------------------------------
@@ -100,7 +94,7 @@ def main() -> None:
         method="l-bfgs-b",
     )
 
-    print(f"L-BFGS-B Results:")
+    print("L-BFGS-B Results:")
     print(f"  Success      : {info_lbfgs['success']}")
     print(f"  True value   : {k_thrust_true:.4f}")
     print(f"  Estimated    : {best_params_lbfgs['k_thrust']:.4f}")
@@ -112,9 +106,7 @@ def main() -> None:
     robot_lbfgs = UnicycleKinematics(
         k_thrust=best_params_lbfgs["k_thrust"], x0=x0, y0=y0, heading0=heading0
     )
-    states_lbfgs = robot_lbfgs.trajectory(
-        thrusts, headings, dt=dt, include_initial=True
-    )
+    states_lbfgs = robot_lbfgs.trajectory(thrusts, headings, dt=dt, include_initial=True)
     coords_lbfgs = states_lbfgs[:, :2]
 
     # ---------------------------------------------------------------------------
@@ -131,7 +123,7 @@ def main() -> None:
         options={"learning_rate": 0.05, "num_steps": 100},
     )
 
-    print(f"Adam Results:")
+    print("Adam Results:")
     print(f"  True value   : {k_thrust_true:.4f}")
     print(f"  Estimated    : {best_params_adam['k_thrust']:.4f}")
     print(f"  Final Loss   : {info_adam['fun']:.6f}")
@@ -159,9 +151,7 @@ def main() -> None:
 
     # Panel 1: Trajectory Comparison
     ax1 = axes[0]
-    ax1.plot(
-        coords_true[:, 0], coords_true[:, 1], "g-", linewidth=3.0, label="Ground Truth"
-    )
+    ax1.plot(coords_true[:, 0], coords_true[:, 1], "g-", linewidth=3.0, label="Ground Truth")
     ax1.scatter(
         coords_noisy[:, 0],
         coords_noisy[:, 1],

@@ -24,7 +24,7 @@ dependencies = [
     "numpy>=1.26.0",
     "scipy>=1.13.0",
     # --- Visualization ---
-    "matplotlib>=3.12",
+    "matplotlib>=3.11",
     # --- Optimization helpers ---
     "optax>=0.2.3",
     # --- Data handling (survey scripts) ---

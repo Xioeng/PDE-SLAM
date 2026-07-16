@@ -1,6 +1,6 @@
 """
-joint_optimization.py
-=====================
+joint.py
+========
 Joint parameter identification for PDE advection-diffusion and kinematic trajectory corrections.
 
 This module provides tools to estimate both PDE physical parameters (diffusivity, constant advection
@@ -11,7 +11,7 @@ from the dead-reckoned kinematic model) using scalar field observations and cont
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, NamedTuple
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -20,53 +20,18 @@ import optax  # type: ignore[import-untyped]
 import scipy.optimize  # type: ignore[import-untyped]
 from jax import Array
 
-from pde_slam.interpolator import SpatialGrid
-from pde_slam.interpolators.spatiotemporal import SpatiotemporalInterpolator
+from pde_slam.interpolators import SpatialGrid, SpatiotemporalInterpolator
 from pde_slam.kinematics import UnicycleKinematics
-from pde_slam.optimization import _pack_params, _unpack_params
+from pde_slam.optimization.kinematics import _pack_params, _unpack_params
 from pde_slam.solver import AdvectionDiffusionSolver, PDEParams
+from pde_slam.types import ObservationData, TrajectoryContext
 
-
-class ObservationData(NamedTuple):
-    """Container for experimental/simulated observations.
-
-    Parameters
-    ----------
-    ts : Array
-        Timestamps of the scalar observations, shape (M,).
-    vals : Array
-        Observed scalar values, shape (M,).
-    """
-
-    ts: Array
-    vals: Array
-
-
-class TrajectoryContext(NamedTuple):
-    """Container for robot inputs and integrated time trajectory metadata.
-
-    Parameters
-    ----------
-    thrusts : Array
-        Thrust commands, shape (N,).
-    headings : Array
-        Compass headings, shape (N,).
-    dt_arr : Array
-        Time step for each command, shape (N,).
-    t_traj : Array
-        Cumulative trajectory timestamps, shape (N + 1,).
-    t0 : float
-        Start time of simulation [s].
-    t_end : float
-        End time of simulation [s].
-    """
-
-    thrusts: Array
-    headings: Array
-    dt_arr: Array
-    t_traj: Array
-    t0: float
-    t_end: float
+# Re-export so existing code that imports from this module continues to work.
+__all__ = [
+    "JointSlamOptimizer",
+    "MultiPdeSlamOptimizer",
+    "unicycle_corrected_trajectory_fn",
+]
 
 
 def unicycle_corrected_trajectory_fn(
@@ -124,7 +89,7 @@ class JointSlamOptimizer:
     ----------
     grid : SpatialGrid
         The rectangular ENU computational spatial grid.
-    solver : AdvectionDiffusionSolver
+    pde_solver : AdvectionDiffusionSolver
         The differentiable PDE solver instance.
     corrected_trajectory_fn : Callable, optional
         A differentiable function that predicts the corrected trajectory.
@@ -158,6 +123,74 @@ class JointSlamOptimizer:
             else corrected_trajectory_fn
         )
 
+    # ------------------------------------------------------------------
+    # Loss components (override in subclasses to customise behaviour)
+    # ------------------------------------------------------------------
+
+    def _data_loss(
+        self,
+        vals_pred: Array,
+        obs_vals: Array,
+        phi0: Array,
+    ) -> Array:
+        """Normalised data MSE: residuals scaled by each field's dynamic range.
+
+        Dividing by ``max(phi0) - min(phi0)`` per field makes the loss
+        dimensionless and field-scale-agnostic: a 1 °C error in a 4 °C
+        temperature range contributes identically to a 1 PSU error in a
+        4 PSU salinity range.
+
+        Boundary condition assumption: zero-Neumann (default solver BC).
+
+        Parameters
+        ----------
+        vals_pred : Array
+            Predicted scalar values, shape ``(M,)`` or ``(M, K)``.
+        obs_vals : Array
+            Observed scalar values, same shape as ``vals_pred``.
+        phi0 : Array
+            Initial condition(s), shape ``(ny, nx)`` or ``(K, ny, nx)``.
+            Only the spatial axes are used for scale computation.
+
+        Returns
+        -------
+        loss : Array
+            Scalar normalised MSE.
+        """
+        if phi0.ndim == 2:  # single field: shape (ny, nx)
+            phi0_max = jnp.max(phi0)
+            phi0_min = jnp.min(phi0)
+            scale = jnp.maximum(phi0_max - phi0_min, 1e-6)
+        else:  # batched: shape (K, ny, nx) — scale per field, kept for broadcasting
+            phi0_max = jnp.max(phi0, axis=(-2, -1))  # (K,)
+            phi0_min = jnp.min(phi0, axis=(-2, -1))  # (K,)
+            scale = jnp.maximum(phi0_max - phi0_min, 1e-6)  # (K,)
+        residuals = (vals_pred - obs_vals) / scale  # dimensionless
+        return jnp.mean(residuals**2)
+
+    def _reg_loss(self, dx: Array) -> Array:
+        """Mean squared Euclidean norm of trajectory corrections per timestep.
+
+        Penalises the 2-D displacement magnitude at each step jointly rather
+        than treating east/north components as independent scalars.
+        Smooth everywhere — no gradient singularity at ``dx = 0``.
+
+        Parameters
+        ----------
+        dx : Array
+            Position corrections, shape ``(N+1, 2)`` in [east_m, north_m].
+
+        Returns
+        -------
+        loss : Array
+            Scalar regularisation term.
+        """
+        return jnp.mean(jnp.sum(dx**2, axis=-1))
+
+    # ------------------------------------------------------------------
+    # Joint loss
+    # ------------------------------------------------------------------
+
     def loss_fn(
         self,
         params: dict[str, Array],
@@ -167,35 +200,35 @@ class JointSlamOptimizer:
         lambda_reg: float,
         k_thrust_fixed: float,
     ) -> Array:
-        """Compute the joint optimization loss.
+        """Compute the joint optimization loss for a **single** PDE.
 
         Parameters
         ----------
         params : dict of str to Array
-            Parameters to evaluate. Must contain 'D', 'v_flow', and 'dx'.
-            Can optionally contain 'k_thrust'.
+            Must contain ``'D'`` (scalar), ``'v_flow'`` (shape ``(2,)``), and
+            ``'dx'`` (shape ``(N+1, 2)``). May optionally contain ``'k_thrust'``.
         phi0 : Array
-            Initial scalar field on the grid, shape (ny, nx).
+            Initial scalar field, shape ``(ny, nx)``.
         obs : ObservationData
-            Container holding timestamps (ts) and values (vals) of the scalar observations.
+            Observation timestamps and scalar values.
         traj : TrajectoryContext
-            Container holding robot inputs (thrusts, headings, dt_arr) and time metadata.
+            Robot control inputs and time-grid metadata.
         lambda_reg : float
-            Regularization weight on the magnitude of position corrections dx.
+            Regularisation weight on trajectory-correction magnitude.
         k_thrust_fixed : float
-            Fixed kinematic thrust parameter used if not present in `params`.
+            Fixed thrust-to-speed factor (used when ``'k_thrust'`` is not in
+            ``params``).
 
         Returns
         -------
         loss : Array
-            Scalar joint optimization loss.
+            Scalar joint loss = normalised data MSE + λ · reg.
         """
         D = params["D"]  # noqa: N806
         v_flow = params["v_flow"]
         dx = params["dx"]
         k_thrust = params.get("k_thrust", k_thrust_fixed)
 
-        # Robot initial position (starting point of trajectory)
         x0 = jnp.zeros(2)
 
         # 1. Integrate corrected trajectory
@@ -207,26 +240,20 @@ class JointSlamOptimizer:
         ny, nx = phi0.shape
         u_field = jnp.broadcast_to(v_flow, (ny, nx, 2))
         pde_params = PDEParams(u_field=u_field, D=D)
-
         snapshots = self.pde_solver.solve(
             phi0, pde_params, t0=traj.t0, t_end=traj.t_end, saveat=traj.t_traj
-        )
+        )  # shape (T, ny, nx)
 
-        # 3. Interpolate trajectory positions to the observation times
+        # 3. Interpolate trajectory to observation times
         x_pred = jnp.interp(obs.ts, traj.t_traj, coords_pred[:, 0])
         y_pred = jnp.interp(obs.ts, traj.t_traj, coords_pred[:, 1])
 
         # 4. Spatiotemporal interpolation of scalar values at robot positions
         interp = SpatiotemporalInterpolator(self.grid, traj.t_traj, snapshots)
-        vals_pred = interp(x_pred, y_pred, obs.ts)
+        vals_pred = interp(x_pred, y_pred, obs.ts)  # shape (M,)
 
-        # 5. Compute loss terms
-        loss_scalar = jnp.mean((vals_pred - obs.vals) ** 2)
-        loss_reg = jnp.mean(dx**2)
-
-        loss = loss_scalar + lambda_reg * loss_reg
-
-        return loss
+        # 5. Compute and combine loss terms
+        return self._data_loss(vals_pred, obs.vals, phi0) + lambda_reg * self._reg_loss(dx)
 
     def fit(
         self,
@@ -538,3 +565,106 @@ class JointSlamOptimizer:
         }
 
         return best_params, info
+
+
+class MultiPdeSlamOptimizer(JointSlamOptimizer):
+    """Joint optimizer for K concurrent advection-diffusion PDEs with a shared velocity field.
+
+    Inherits the full optimizer loop (L-BFGS-B, Adam, JAX-SciPy) from
+    :class:`JointSlamOptimizer`.  Only :meth:`loss_fn` is overridden to
+    handle a batch of K initial conditions and K individual diffusivities,
+    while ``v_flow`` remains a single shared 2-vector.
+
+    Parameters
+    ----------
+    grid : SpatialGrid
+        The rectangular ENU computational spatial grid.
+    pde_solver : AdvectionDiffusionSolver
+        The differentiable PDE solver instance.
+    corrected_trajectory_fn : Callable, optional
+        Same signature as in :class:`JointSlamOptimizer`.
+        Defaults to :func:`unicycle_corrected_trajectory_fn`.
+
+    Notes
+    -----
+    Expected parameter shapes inside ``params``:
+
+    * ``'D'`` — shape ``(K,)`` — one diffusivity per field.
+    * ``'v_flow'`` — shape ``(2,)`` — single flow shared by all fields.
+    * ``'dx'`` — shape ``(N+1, 2)`` — trajectory corrections.
+
+    ``phi0`` passed to :meth:`fit` must have shape ``(K, ny, nx)``.
+    ``obs_vals`` must have shape ``(M, K)``.
+    """
+
+    def loss_fn(
+        self,
+        params: dict[str, Array],
+        phi0: Array,
+        obs: ObservationData,
+        traj: TrajectoryContext,
+        lambda_reg: float,
+        k_thrust_fixed: float,
+    ) -> Array:
+        """Compute the joint optimization loss for **K concurrent** PDEs.
+
+        Parameters
+        ----------
+        params : dict of str to Array
+            Must contain ``'D'`` (shape ``(K,)``), ``'v_flow'`` (shape
+            ``(2,)``), and ``'dx'`` (shape ``(N+1, 2)``).  May optionally
+            contain ``'k_thrust'``.
+        phi0 : Array
+            Initial scalar fields, shape ``(K, ny, nx)``.
+        obs : ObservationData
+            Timestamps ``(M,)`` and values ``(M, K)`` for all K fields.
+        traj : TrajectoryContext
+            Robot control inputs and time-grid metadata.
+        lambda_reg : float
+            Regularisation weight on trajectory-correction magnitude.
+        k_thrust_fixed : float
+            Fixed thrust-to-speed factor (used when ``'k_thrust'`` not in
+            ``params``).
+
+        Returns
+        -------
+        loss : Array
+            Scalar joint loss = normalised data MSE (per field) + λ · reg.
+        """
+        D = params["D"]  # noqa: N806  shape (K,)
+        v_flow = params["v_flow"]  # shape (2,)
+        dx = params["dx"]
+        k_thrust = params.get("k_thrust", k_thrust_fixed)
+
+        x0 = jnp.zeros(2)
+
+        # 1. Integrate corrected trajectory
+        coords_pred = self.corrected_trajectory_fn(
+            x0, traj.thrusts, traj.headings, traj.dt_arr, k_thrust, dx
+        )
+
+        # 2. Batch-solve K PDEs — shared v_flow, unique D per field
+        num_pdes, ny, nx = phi0.shape
+        u_fields = jnp.broadcast_to(v_flow, (num_pdes, ny, nx, 2))
+        pde_params = PDEParams(u_field=u_fields, D=D)
+
+        solve_vmap = jax.vmap(
+            lambda p0, p_params: self.pde_solver.solve(
+                p0, p_params, t0=traj.t0, t_end=traj.t_end, saveat=traj.t_traj
+            )
+        )
+        snapshots = solve_vmap(phi0, pde_params)  # (K, T, ny, nx)
+
+        # 3. Interpolate trajectory to observation times
+        x_pred = jnp.interp(obs.ts, traj.t_traj, coords_pred[:, 0])
+        y_pred = jnp.interp(obs.ts, traj.t_traj, coords_pred[:, 1])
+
+        # 4. Spatiotemporal interpolation — one interpolator per field
+        def interp_single(snapshots_k: Array) -> Array:
+            interp = SpatiotemporalInterpolator(self.grid, traj.t_traj, snapshots_k)
+            return interp(x_pred, y_pred, obs.ts)  # (M,)
+
+        vals_pred = jax.vmap(interp_single)(snapshots).T  # (M, K)
+
+        # 5. Compute and combine loss terms (scale inherited from parent)
+        return self._data_loss(vals_pred, obs.vals, phi0) + lambda_reg * self._reg_loss(dx)

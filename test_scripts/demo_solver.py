@@ -22,16 +22,16 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pde_slam.interpolator import SpatialGrid
+from pde_slam.interpolators import SpatialGrid
 from pde_slam.solver import AdvectionDiffusionSolver, PDEParams
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-DOMAIN   = 250.0   # half-width [m]
-NX = NY  = 80
-DT_MAX   = 2.0     # solver max step [s]
+DOMAIN = 250.0  # half-width [m]
+NX = NY = 80
+DT_MAX = 2.0  # solver max step [s]
 
 T_SNAPSHOTS = [0.0, 60.0, 120.0, 500.0]  # times to capture [s]
 
@@ -43,20 +43,23 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # ---------------------------------------------------------------------------
 
 grid = SpatialGrid(
-    x_min=-DOMAIN, x_max=DOMAIN,
-    y_min=-DOMAIN, y_max=DOMAIN,
-    nx=NX, ny=NY,
+    x_min=-DOMAIN,
+    x_max=DOMAIN,
+    y_min=-DOMAIN,
+    y_max=DOMAIN,
+    nx=NX,
+    ny=NY,
 )
 
 # ---------------------------------------------------------------------------
 # Initial condition: Gaussian salinity plume
 # ---------------------------------------------------------------------------
 
-AMBIENT_SAL = 34.5   # PSU
-PLUME_SAL   = 20.0   # PSU (fresh water intrusion)
-PLUME_CX    = -80.0  # plume centre east [m]
-PLUME_CY    = -60.0  # plume centre north [m]
-PLUME_SIG   = 55.0   # Gaussian half-width [m]
+AMBIENT_SAL = 34.5  # PSU
+PLUME_SAL = 20.0  # PSU (fresh water intrusion)
+PLUME_CX = -80.0  # plume centre east [m]
+PLUME_CY = -60.0  # plume centre north [m]
+PLUME_SIG = 55.0  # Gaussian half-width [m]
 
 r2 = (grid.XX - PLUME_CX) ** 2 + (grid.YY - PLUME_CY) ** 2
 phi0 = jnp.array(
@@ -73,21 +76,21 @@ u_mean = np.array([0.15, 0.10])  # m/s
 
 # Weak anti-clockwise eddy centred at (80, 40) m
 eddy_cx, eddy_cy = -80.0, -60.0
-eddy_r = 60.0   # eddy radius [m]
+eddy_r = 60.0  # eddy radius [m]
 eddy_mag = 0.5  # peak eddy speed [m/s]
 
 dx_eddy = grid.XX - eddy_cx
 dy_eddy = grid.YY - eddy_cy
 r_eddy = np.sqrt(dx_eddy**2 + dy_eddy**2) + 1e-6
-eddy_u = -eddy_mag * (dy_eddy / r_eddy) * np.exp(-r_eddy**2 / (2 * eddy_r**2))
-eddy_v =  eddy_mag * (dx_eddy / r_eddy) * np.exp(-r_eddy**2 / (2 * eddy_r**2))
+eddy_u = -eddy_mag * (dy_eddy / r_eddy) * np.exp(-(r_eddy**2) / (2 * eddy_r**2))
+eddy_v = eddy_mag * (dx_eddy / r_eddy) * np.exp(-(r_eddy**2) / (2 * eddy_r**2))
 
 u_field = jnp.array(
     np.stack([u_mean[0] + eddy_u, u_mean[1] + eddy_v], axis=-1),
     dtype=jnp.float32,
 )
 print(jnp.sqrt(jnp.square(u_field[..., 0]) + jnp.square(u_field[..., 1])).mean())
-D = jnp.array(0.8, dtype=jnp.float32)   # m²/s diffusivity
+D = jnp.array(0.8, dtype=jnp.float32)  # m²/s diffusivity
 
 params = PDEParams(u_field=u_field, D=D)
 
@@ -114,12 +117,13 @@ snapshots = solver.solve(phi0, params, t0=T_SNAPSHOTS[0], t_end=T_SNAPSHOTS[-1],
 VMIN = float(phi0.min()) - 0.2
 VMAX = float(phi0.max()) + 0.2
 CMAP = "RdYlBu_r"
-EXT  = [-DOMAIN, DOMAIN, -DOMAIN, DOMAIN]
+EXT = [-DOMAIN, DOMAIN, -DOMAIN, DOMAIN]
 
 fig, axes = plt.subplots(1, 4, figsize=(18, 4.5), constrained_layout=True)
 fig.suptitle(
     "AdvectionDiffusionSolver — Salinity plume evolution [PSU]",
-    fontsize=13, fontweight="bold",
+    fontsize=13,
+    fontweight="bold",
 )
 
 for ax, snap, t in zip(axes, snapshots, T_SNAPSHOTS):
@@ -134,9 +138,14 @@ for ax, snap, t in zip(axes, snapshots, T_SNAPSHOTS):
 step = 8
 ax = axes[-1]
 ax.quiver(
-    grid.XX[::step, ::step], grid.YY[::step, ::step],
-    np.array(u_field[::step, ::step, 0]), np.array(u_field[::step, ::step, 1]),
-    color="k", scale=4.5, alpha=0.55, width=0.003,
+    grid.XX[::step, ::step],
+    grid.YY[::step, ::step],
+    np.array(u_field[::step, ::step, 0]),
+    np.array(u_field[::step, ::step, 1]),
+    color="k",
+    scale=4.5,
+    alpha=0.55,
+    width=0.003,
 )
 
 out_path = OUTPUT_DIR / "demo_solver.png"

@@ -21,15 +21,15 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pde_slam.interpolator import FieldInterpolator, SpatialGrid
+from pde_slam.interpolators import FieldInterpolator, SpatialGrid
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-DOMAIN = 250.0          # half-width [m]; domain is [-250, 250]²
-N_OBS  = 120            # number of scattered observations
-SEED   = 42
+DOMAIN = 250.0  # half-width [m]; domain is [-250, 250]²
+N_OBS = 120  # number of scattered observations
+SEED = 42
 
 OUTPUT_DIR = Path("outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -38,11 +38,11 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # True salinity field (river plume, same model as the survey generator)
 # ---------------------------------------------------------------------------
 
-PLUME_SOURCE     = np.array([-180.0, -180.0])
+PLUME_SOURCE = np.array([-180.0, -180.0])
 AMBIENT_SALINITY = 34.5
-FRESH_SALINITY   = 18.0
-PLUME_WIDTH      = 70.0
-PLUME_DECAY      = 0.004
+FRESH_SALINITY = 18.0
+PLUME_WIDTH = 70.0
+PLUME_DECAY = 0.004
 
 
 def _true_salinity(x: np.ndarray, y: np.ndarray) -> np.ndarray:
@@ -63,9 +63,12 @@ def _true_salinity(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 grid = SpatialGrid(
-    x_min=-DOMAIN, x_max=DOMAIN,
-    y_min=-DOMAIN, y_max=DOMAIN,
-    nx=80, ny=80,
+    x_min=-DOMAIN,
+    x_max=DOMAIN,
+    y_min=-DOMAIN,
+    y_max=DOMAIN,
+    nx=80,
+    ny=80,
 )
 
 rng = np.random.default_rng(SEED)
@@ -81,8 +84,7 @@ true_grid = _true_salinity(grid.XX.ravel(), grid.YY.ravel()).reshape(grid.shape)
 # ---------------------------------------------------------------------------
 
 rbf_field = FieldInterpolator(grid, method="rbf").fit_predict(xy_obs, values_noisy)
-spl_field = FieldInterpolator(grid, method="spline", spline_s=0.5
-).fit_predict(xy_obs, values_noisy)
+spl_field = FieldInterpolator(grid, method="spline", spline_s=0.5).fit_predict(xy_obs, values_noisy)
 
 # ---------------------------------------------------------------------------
 # Plotting
@@ -94,7 +96,8 @@ CMAP = "RdYlBu_r"
 fig, axes = plt.subplots(1, 3, figsize=(15, 5), constrained_layout=True)
 fig.suptitle(
     "FieldInterpolator demo — River plume salinity [PSU]",
-    fontsize=13, fontweight="bold",
+    fontsize=13,
+    fontweight="bold",
 )
 
 ext = [-DOMAIN, DOMAIN, -DOMAIN, DOMAIN]
@@ -102,19 +105,28 @@ ext = [-DOMAIN, DOMAIN, -DOMAIN, DOMAIN]
 # Panel 1 – true field
 ax = axes[0]
 im = ax.imshow(true_grid, origin="lower", extent=ext, vmin=VMIN, vmax=VMAX, cmap=CMAP)
-ax.scatter(xy_obs[:, 0], xy_obs[:, 1], c=values_noisy,
-           cmap=CMAP, vmin=VMIN, vmax=VMAX,
-           s=30, edgecolors="k", linewidths=0.4, label="observations")
+ax.scatter(
+    xy_obs[:, 0],
+    xy_obs[:, 1],
+    c=values_noisy,
+    cmap=CMAP,
+    vmin=VMIN,
+    vmax=VMAX,
+    s=30,
+    edgecolors="k",
+    linewidths=0.4,
+    label="observations",
+)
 ax.set_title("True field + observations")
-ax.set_xlabel("East [m]"); ax.set_ylabel("North [m]")
+ax.set_xlabel("East [m]")
+ax.set_ylabel("North [m]")
 ax.legend(loc="upper right", fontsize=8)
 plt.colorbar(im, ax=ax, shrink=0.85)
 
 # Panel 2 – RBF reconstruction
 ax = axes[1]
 im = ax.imshow(np.array(rbf_field), origin="lower", extent=ext, vmin=VMIN, vmax=VMAX, cmap=CMAP)
-ax.scatter(xy_obs[:, 0], xy_obs[:, 1], c="white",
-           s=12, edgecolors="k", linewidths=0.4, alpha=0.6)
+ax.scatter(xy_obs[:, 0], xy_obs[:, 1], c="white", s=12, edgecolors="k", linewidths=0.4, alpha=0.6)
 ax.set_title("RBF interpolation (thin-plate-spline)")
 ax.set_xlabel("East [m]")
 plt.colorbar(im, ax=ax, shrink=0.85)
@@ -122,8 +134,7 @@ plt.colorbar(im, ax=ax, shrink=0.85)
 # Panel 3 – Spline reconstruction
 ax = axes[2]
 im = ax.imshow(np.array(spl_field), origin="lower", extent=ext, vmin=VMIN, vmax=VMAX, cmap=CMAP)
-ax.scatter(xy_obs[:, 0], xy_obs[:, 1], c="white",
-           s=12, edgecolors="k", linewidths=0.4, alpha=0.6)
+ax.scatter(xy_obs[:, 0], xy_obs[:, 1], c="white", s=12, edgecolors="k", linewidths=0.4, alpha=0.6)
 ax.set_title("Spline interpolation (bivariate cubic)")
 ax.set_xlabel("East [m]")
 plt.colorbar(im, ax=ax, shrink=0.85)

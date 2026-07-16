@@ -8,7 +8,7 @@ jax.config.update("jax_enable_x64", True)
 
 import pytest
 
-from pde_slam.interpolator import SpatialGrid
+from pde_slam.interpolators import SpatialGrid
 
 
 @pytest.fixture(scope="session")

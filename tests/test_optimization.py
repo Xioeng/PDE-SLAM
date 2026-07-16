@@ -25,7 +25,7 @@ class TestKinematicsOptimizer:
 
         # Create control inputs: time-varying thrust and heading
         np.random.seed(42)
-        thrusts = np.random.uniform(0.3, 0.9, size=n_steps)
+        thrusts = np.random.uniform(30.0, 90.0, size=n_steps)
         headings = np.random.uniform(-np.pi, np.pi, size=n_steps)
 
         # Run trajectory to get coords_obs
@@ -60,7 +60,7 @@ class TestKinematicsOptimizer:
         n_steps = 30
 
         robot = UnicycleKinematics(k_thrust=k_thrust_true, x0=0.0, y0=0.0, heading0=0.0)
-        thrusts = np.full(n_steps, 0.8)
+        thrusts = np.full(n_steps, 80.0)
         headings = np.linspace(-np.pi / 2, np.pi / 2, n_steps)
 
         states = robot.trajectory(thrusts, headings, dt=dt, include_initial=True)

@@ -16,12 +16,16 @@ try:
 except PackageNotFoundError:
     __version__ = "0.0.0.dev"
 
-from pde_slam.interpolator import FieldInterpolator, SpatialGrid
-from pde_slam.joint_optimization import JointSlamOptimizer
+from pde_slam.interpolators import FieldInterpolator, SpatialGrid
 from pde_slam.kinematics import BaseKinematics, UnicycleKinematics
-from pde_slam.optimization import KinematicsOptimizer
+from pde_slam.optimization import (
+    JointSlamOptimizer,
+    KinematicsOptimizer,
+    MultiPdeSlamOptimizer,
+)
 from pde_slam.solver import AdvectionDiffusionSolver, PDEParams
 from pde_slam.survey_loader import SurveyLoader
+from pde_slam.types import ObservationData, TrajectoryContext
 
 __all__: list[str] = [
     "__version__",
@@ -29,10 +33,13 @@ __all__: list[str] = [
     "BaseKinematics",
     "ENUFrame",
     "FieldInterpolator",
+    "JointSlamOptimizer",
+    "KinematicsOptimizer",
+    "MultiPdeSlamOptimizer",
+    "ObservationData",
     "PDEParams",
     "SpatialGrid",
     "SurveyLoader",
+    "TrajectoryContext",
     "UnicycleKinematics",
-    "KinematicsOptimizer",
-    "JointSlamOptimizer",
 ]
