@@ -26,6 +26,15 @@ from pde_slam.optimization import (
 from pde_slam.solver import AdvectionDiffusionSolver, PDEParams
 from pde_slam.survey_loader import SurveyLoader
 from pde_slam.types import ObservationData, TrajectoryContext
+from pde_slam.config import (
+    GridConfig,
+    SolverConfig,
+    PlumeConfig,
+    PdeParamsConfig,
+    OptimizationConfig,
+    PipelineConfig,
+    load_config,
+)
 
 __all__: list[str] = [
     "__version__",
@@ -42,4 +51,11 @@ __all__: list[str] = [
     "SurveyLoader",
     "TrajectoryContext",
     "UnicycleKinematics",
+    "GridConfig",
+    "SolverConfig",
+    "PlumeConfig",
+    "PdeParamsConfig",
+    "OptimizationConfig",
+    "PipelineConfig",
+    "load_config",
 ]

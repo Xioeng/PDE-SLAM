@@ -33,9 +33,7 @@ def main() -> None:
     np.random.seed(42)
 
     # Spatial Grid
-    grid = SpatialGrid(
-        x_min=-150.0, x_max=150.0, y_min=-150.0, y_max=150.0, nx=100, ny=100
-    )
+    grid = SpatialGrid(x_min=-150.0, x_max=150.0, y_min=-150.0, y_max=150.0, nx=100, ny=100)
     solver = AdvectionDiffusionSolver(grid, dt_max=1.0)
 
     # Ground Truth PDE Parameters
@@ -52,7 +50,7 @@ def main() -> None:
     # ---------------------------------------------------------------------------
     # 2. Setup Trajectory and Control Inputs
     # ---------------------------------------------------------------------------
-    n_steps = 200
+    n_steps = 100
     dt = 1.0
     times = np.linspace(0.0, n_steps * dt, n_steps)
     times_traj = np.linspace(0.0, n_steps * dt, n_steps + 1)
@@ -63,9 +61,7 @@ def main() -> None:
 
     # True trajectory position corrections dx_true
     # (represents a wave drift or time-varying kinematics bias)
-    dx_true = 0.1 * np.column_stack(
-        [np.sin(times_traj / 5.0), np.cos(times_traj / 8.0)]
-    )
+    dx_true = 0.1 * np.column_stack([np.sin(times_traj / 5.0), np.cos(times_traj / 8.0)])
     # Keep initial correction close to zero
     dx_true = dx_true - dx_true[0]
 
@@ -85,9 +81,7 @@ def main() -> None:
 
     # Batch solve PDE for the 3 fields
     solve_vmap = jax.vmap(
-        lambda p0, params: solver.solve(
-            p0, params, t0=0.0, t_end=t_traj[-1], saveat=t_traj
-        )
+        lambda p0, params: solver.solve(p0, params, t0=0.0, t_end=t_traj[-1], saveat=t_traj)
     )
     snapshots_true = solve_vmap(phi0, pde_params_true)  # shape (3, T, ny, nx)
 
@@ -173,9 +167,7 @@ def main() -> None:
     coords_lbfgs = unicycle_corrected_trajectory_fn(
         x0, thrusts, headings, dt, k_thrust_true, best_params_lbfgs["dx"]
     )
-    u_field_lbfgs = jnp.broadcast_to(
-        best_params_lbfgs["v_flow"], (3, grid.ny, grid.nx, 2)
-    )
+    u_field_lbfgs = jnp.broadcast_to(best_params_lbfgs["v_flow"], (3, grid.ny, grid.nx, 2))
     pde_params_lbfgs = PDEParams(u_field=u_field_lbfgs, D=best_params_lbfgs["D"])
     snapshots_lbfgs = solve_vmap(phi0, pde_params_lbfgs)
 
@@ -218,9 +210,7 @@ def main() -> None:
     coords_adam = unicycle_corrected_trajectory_fn(
         x0, thrusts, headings, dt, k_thrust_true, best_params_adam["dx"]
     )
-    u_field_adam = jnp.broadcast_to(
-        best_params_adam["v_flow"], (3, grid.ny, grid.nx, 2)
-    )
+    u_field_adam = jnp.broadcast_to(best_params_adam["v_flow"], (3, grid.ny, grid.nx, 2))
     pde_params_adam = PDEParams(u_field=u_field_adam, D=best_params_adam["D"])
     snapshots_adam = solve_vmap(phi0, pde_params_adam)
 
@@ -273,9 +263,7 @@ def main() -> None:
 
     # Panel 1: Trajectory Comparison
     ax1 = axes[0, 0]
-    ax1.plot(
-        coords_true[:, 0], coords_true[:, 1], "g-", linewidth=3.0, label="Ground Truth"
-    )
+    ax1.plot(coords_true[:, 0], coords_true[:, 1], "g-", linewidth=3.0, label="Ground Truth")
     ax1.scatter(
         coords_noisy[:, 0],
         coords_noisy[:, 1],
@@ -367,9 +355,7 @@ def main() -> None:
     ax3 = axes[0, 2]
     loss_history = info_adam["loss_history"]
     ax3.plot(loss_history, "m-", linewidth=2.0, label="Adam Loss")
-    ax3.axhline(
-        info_lbfgs["fun"], color="blue", linestyle="--", label="L-BFGS-B Final Loss"
-    )
+    ax3.axhline(info_lbfgs["fun"], color="blue", linestyle="--", label="L-BFGS-B Final Loss")
     ax3.set_title("Optimization Loss Curve")
     ax3.set_xlabel("Iteration / Steps")
     ax3.set_ylabel("Joint MSE Loss")
@@ -409,9 +395,7 @@ def main() -> None:
             ax.imshow(np.array(rgb_field), origin="lower", extent=ext)
 
             # Plot trajectory up to current time step
-            ax.plot(
-                coords[: t_idx + 1, 0], coords[: t_idx + 1, 1], style, linewidth=1.5
-            )
+            ax.plot(coords[: t_idx + 1, 0], coords[: t_idx + 1, 1], style, linewidth=1.5)
             # Draw current position
             ax.scatter(
                 coords[t_idx, 0],

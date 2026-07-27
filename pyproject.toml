@@ -29,6 +29,8 @@ dependencies = [
     "optax>=0.2.3",
     # --- Data handling (survey scripts) ---
     "pandas>=2.2.0",
+    # --- Configuration management & ROS-entrypoint support ---
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,43 @@
+# Grid setup
+grid:
+  x_min: -150.0
+  x_max: 150.0
+  y_min: -150.0
+  y_max: 150.0
+  nx: 100
+  ny: 100
+
+# Solver settings
+solver:
+  dt_max: 1.0
+
+# Initial condition plumes (custom spatial features)
+plumes:
+  centers:
+    - [-30.0, 20.0]
+    - [20.0, -20.0]
+    - [-40.0, -50.0]
+  widths:
+    - 25.0
+    - 20.0
+    - 25.0
+  amplitudes:
+    - 1.0
+    - 1.0
+    - 1.0
+  num_random: 0
+  seed: 42
+
+# PDE ground truth physical and kinematic parameters
+pde_params:
+  D: [0.6, 0.2, 1.2]
+  v_flow: [0.5, -0.3]
+  k_thrust: 5.0
+
+# Optimization configurations
+optimization:
+  lambda_reg: 10.0
+  method: "l-bfgs-b"
+  maxiter: 100
+  learning_rate: 0.05
+  num_steps: 100
