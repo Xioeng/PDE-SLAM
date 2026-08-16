@@ -16,7 +16,11 @@ Run::
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+# Add project root to sys.path so pde_slam is importable without package installation
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt

@@ -24,6 +24,9 @@ import contextlib
 import sys
 from pathlib import Path
 
+# Add project root to sys.path so pde_slam is importable without package installation
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import matplotlib
 
 # Use interactive GUI backend if possible

@@ -1300,7 +1300,7 @@ wheels = [
 [[package]]
 name = "pde-slam"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "diffrax" },
     { name = "jax", extra = ["cuda12"] },

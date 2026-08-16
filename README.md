@@ -62,16 +62,21 @@ $$\frac{\partial \phi}{\partial t} + \mathbf{u} \cdot \nabla \phi = D \, \nabla^
 
 ### 1. Environment Setup
 
+Install project dependencies:
+
 ```bash
 uv sync --all-extras
 source .venv/bin/activate
 ```
 
-### 2. Run Demos
+### 2. Run Demos & Scripts
+
+All scripts can be executed directly without installing `pde_slam` as a package:
 
 ```bash
 python test_scripts/demo_interpolator.py
 python test_scripts/demo_solver.py
+python test_scripts/demo_joint_optimization.py
 ```
 
 ### 3. Run Tests
