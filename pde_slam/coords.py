@@ -154,6 +154,18 @@ class ENUFrame:
         lon = self.lon0 + east_m / self._m_per_deg_east
         return lat, lon
 
+    def enu_to_geodetic(self, enu_points: np.ndarray | Array) -> np.ndarray:
+        """Convert (N, 2) [east_m, north_m] array to (N, 2) [lat, lon] array."""
+        pts = np.asarray(enu_points, dtype=np.float64)
+        lat, lon = self.from_enu(pts[:, 0], pts[:, 1])
+        return np.stack([lat, lon], axis=-1)
+
+    def geodetic_to_enu(self, geo_points: np.ndarray | Array) -> np.ndarray:
+        """Convert (N, 2) [lat, lon] array to (N, 2) [east_m, north_m] array."""
+        pts = np.asarray(geo_points, dtype=np.float64)
+        east_m, north_m = self.to_enu(pts[:, 0], pts[:, 1])
+        return np.stack([east_m, north_m], axis=-1)
+
     # ------------------------------------------------------------------
     # Dunder helpers
     # ------------------------------------------------------------------

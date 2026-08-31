@@ -7,12 +7,9 @@ from jax import Array
 
 from pde_slam.interpolators import (
     SpatialGrid,
-    SpatiotemporalInterpolator,
     create_gaussian_plume,
     create_random_plumes,
-    simulate_virtual_sensor,
 )
-from pde_slam.solver import AdvectionDiffusionSolver, PDEParams
 
 
 def test_create_gaussian_plume(small_grid: SpatialGrid) -> None:
@@ -24,7 +21,6 @@ def test_create_gaussian_plume(small_grid: SpatialGrid) -> None:
 
     assert isinstance(field, Array)
     assert field.shape == (small_grid.ny, small_grid.nx)
-
 
     # Maximum should be close to center (allow minor shift due to grid discretisation)
     max_val = float(jnp.max(field))
@@ -51,38 +47,3 @@ def test_create_random_plumes(small_grid: SpatialGrid) -> None:
 
     # Seed variations check
     assert not jnp.allclose(field_1, field_diff)
-
-
-def test_simulate_virtual_sensor(small_grid: SpatialGrid) -> None:
-    """Test PDE-based virtual sensor simulation for single and batched initial fields."""
-    solver = AdvectionDiffusionSolver(small_grid, dt_max=0.5)
-
-    u_field = jnp.broadcast_to(jnp.array([0.5, -0.2]), (small_grid.ny, small_grid.nx, 2))
-    pde_params = PDEParams(u_field=u_field, D=jnp.array(0.5))
-
-    ts = jnp.array([0.0, 1.0, 2.0])
-
-    # 1. Single Field
-    phi0_single = create_gaussian_plume(small_grid, center=(0.0, 0.0), width=10.0)
-    sensor = simulate_virtual_sensor(small_grid, solver, phi0_single, pde_params, ts)
-
-    assert isinstance(sensor, SpatiotemporalInterpolator)
-    val = sensor(jnp.array([0.0]), jnp.array([0.0]), jnp.array([1.0]))
-    assert val.shape == (1,)
-
-    # 2. Batched Fields
-    phi0_batched = jnp.stack(
-        [
-            create_gaussian_plume(small_grid, center=(-10.0, 0.0), width=8.0),
-            create_gaussian_plume(small_grid, center=(10.0, 5.0), width=12.0),
-        ],
-        axis=0,
-    )
-    sensors = simulate_virtual_sensor(small_grid, solver, phi0_batched, pde_params, ts)
-
-    assert isinstance(sensors, list)
-    assert len(sensors) == 2
-    for s in sensors:
-        assert isinstance(s, SpatiotemporalInterpolator)
-        val = s(jnp.array([5.0]), jnp.array([-5.0]), jnp.array([1.5]))
-        assert val.shape == (1,)

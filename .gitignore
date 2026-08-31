@@ -1,4 +1,4 @@
-outputs/
+output/
 data/raw/*.csv
 data/raw/*.json
 data/processed/
@@ -15,3 +15,5 @@ build/
 htmlcov/
 .coverage
 *.log
+!output/results/
+scripts/

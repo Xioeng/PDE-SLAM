@@ -1,0 +1,60 @@
+# =============================================================================
+# Toy Hydrodynamic Simulation Multi-Field RBPF-SLAM Experiment Configuration
+# =============================================================================
+
+simulation:
+  sim_dir: "data/adv_diff_simulations/toy_simulation"
+  fields:
+    - "salinity"
+    - "temperature"
+  mask_outside: false
+
+ic_anchors:
+  mode: "auto"
+  n_points: 25
+  seed: 42
+  epochs: 20  # Warm-up pre-training epochs on initial condition (t=0) buffer
+
+robot:
+  kinematics: "diff_drive"
+  nominal_speed: 2.0
+  dt: 1.0
+  v_noise_std: 0.05
+  omega_noise_std: 0.02
+  acceptance_radius: 4.0
+  waypoints_mode: "auto"
+  waypoints:
+    - [-20.0, -20.0]
+    - [20.0, -20.0]
+    - [20.0, 20.0]
+    - [-20.0, 20.0]
+    - [-20.0, -20.0]
+
+rbpf:
+  n_particles: 50
+  pos_init_std: 0.2
+  heading_init_std: 0.02
+  measurement_noise_std: 0.001
+  lin_process_noise: 0.0001
+  p0_lin: 0.0025
+  resample_threshold: 0.5
+  seed: 43
+
+pinn:
+  arch: "mlp"
+  hidden_dim: 64
+  num_layers: 3
+  learning_rate: 0.01
+  num_steps: 10
+  num_colloc: 100
+  margin: 10.0
+  w_pde: 0.05
+
+output:
+  sim_name: "toy_simulation"
+  results_dir: "output"
+  checkpoints: [0, 25, 50, 75, 100]
+  satellite_zoom: 17
+  save_experiment: true
+  save_grids: false
+
