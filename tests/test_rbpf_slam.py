@@ -254,7 +254,7 @@ class TestPinnFieldMap:
         assert pinn_map.params is not None
         res = pinn_map.pde_residual(t=10.0, x=5.0, y=-2.0)
 
-        assert res.shape == ()
+        assert res.shape == (1,)
         assert jnp.isfinite(res)
 
     def test_sample_trajectory_collocation_points_bounds(self) -> None:

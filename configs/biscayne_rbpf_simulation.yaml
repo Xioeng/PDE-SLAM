@@ -22,7 +22,7 @@ robot:
   dt: 1.0
   v_noise_std: 0.01        # VELOCITY_NOISE_STD (was hardcoded 0.01)
   omega_noise_std: 0.005   # OMEGA_NOISE_STD    (was hardcoded 0.005)
-  acceptance_radius: 5.0
+  acceptance_radius: 2.0
   waypoints_mode: "auto"
 
 rbpf:

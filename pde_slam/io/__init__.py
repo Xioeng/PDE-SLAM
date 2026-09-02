@@ -18,6 +18,11 @@ from pde_slam.io.simulation import (
     match_field_name,
     sample_simulation_field,
 )
+from pde_slam.io.survey import (
+    SurveyTrajectory,
+    interpolate_kinematic_trajectory,
+    load_survey_csv,
+)
 
 __all__ = [
     "SlamExperimentData",
@@ -28,4 +33,7 @@ __all__ = [
     "sample_simulation_field",
     "generate_ic_anchors",
     "match_field_name",
+    "SurveyTrajectory",
+    "interpolate_kinematic_trajectory",
+    "load_survey_csv",
 ]

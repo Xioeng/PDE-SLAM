@@ -118,6 +118,16 @@ class OutputConfig:
 
 
 @dataclass
+class SurveyConfig:
+    """CSV survey trajectory ingestion parameters."""
+
+    csv_path: str = "data/csv/data.csv"
+    t_max: float = 500.0
+    dt: float = 1.0
+    use_csv_measurements: bool = False
+
+
+@dataclass
 class RbpfExperimentConfig:
     """Comprehensive experiment configuration for RBPF simulation runs."""
 
@@ -127,6 +137,7 @@ class RbpfExperimentConfig:
     rbpf: RbpfFilterConfig = field(default_factory=RbpfFilterConfig)
     pinn: PinnMapConfig = field(default_factory=PinnMapConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
+    survey: SurveyConfig = field(default_factory=SurveyConfig)
 
 
 def load_rbpf_experiment_config(yaml_path: str | Path) -> RbpfExperimentConfig:
@@ -237,6 +248,14 @@ def load_rbpf_experiment_config(yaml_path: str | Path) -> RbpfExperimentConfig:
         save_grids=out_raw.get("save_grids", True),
     )
 
+    survey_raw = raw.get("survey", {})
+    survey_cfg = SurveyConfig(
+        csv_path=str(survey_raw.get("csv_path", "data/csv/data.csv")),
+        t_max=float(survey_raw.get("t_max", 500.0)),
+        dt=float(survey_raw.get("dt", 1.0)),
+        use_csv_measurements=bool(survey_raw.get("use_csv_measurements", False)),
+    )
+
     return RbpfExperimentConfig(
         simulation=simulation_cfg,
         ic_anchors=ic_cfg,
@@ -244,6 +263,7 @@ def load_rbpf_experiment_config(yaml_path: str | Path) -> RbpfExperimentConfig:
         rbpf=rbpf_cfg,
         pinn=pinn_cfg,
         output=out_cfg,
+        survey=survey_cfg,
     )
 
 
