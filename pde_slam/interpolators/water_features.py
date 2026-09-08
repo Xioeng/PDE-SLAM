@@ -1,8 +1,7 @@
 """
 water_features.py
-=================
-Utilities for generating spatial initial conditions (Gaussian plumes, multiple/random plumes)
-and running the PDE solver to construct virtual sensors as spatiotemporal interpolators.
+Utilities for generating spatial initial conditions (Gaussian plumes,
+multiple/random plumes) and constructing virtual sensor interpolators.
 """
 
 from __future__ import annotations
@@ -12,8 +11,6 @@ import jax.numpy as jnp
 from jax import Array
 
 from pde_slam.interpolators.grid import SpatialGrid
-from pde_slam.interpolators.spatiotemporal import SpatiotemporalInterpolator
-from pde_slam.solver import AdvectionDiffusionSolver, PDEParams
 
 
 def create_gaussian_plume(
@@ -75,8 +72,12 @@ def create_random_plumes(
     x_min, x_max = grid.x_min, grid.x_max
     y_min, y_max = grid.y_min, grid.y_max
 
-    centers_x = jax.random.uniform(key_x, (num_plumes,), minval=x_min * 0.7, maxval=x_max * 0.7)
-    centers_y = jax.random.uniform(key_y, (num_plumes,), minval=y_min * 0.7, maxval=y_max * 0.7)
+    centers_x = jax.random.uniform(
+        key_x, (num_plumes,), minval=x_min * 0.7, maxval=x_max * 0.7
+    )
+    centers_y = jax.random.uniform(
+        key_y, (num_plumes,), minval=y_min * 0.7, maxval=y_max * 0.7
+    )
 
     # Randomized width between 5% and 15% of the average grid span
     grid_span = 0.5 * ((x_max - x_min) + (y_max - y_min))
@@ -95,58 +96,3 @@ def create_random_plumes(
 
     plumes_field = jax.vmap(single_plume)(centers_x, centers_y, widths, amplitudes)
     return jnp.sum(plumes_field, axis=0)
-
-
-def simulate_virtual_sensor(
-    grid: SpatialGrid,
-    solver: AdvectionDiffusionSolver,
-    phi0: Array,
-    pde_params: PDEParams,
-    ts: Array,
-) -> SpatiotemporalInterpolator | list[SpatiotemporalInterpolator]:
-    """Simulate a Passive Scalar Field using the PDE solver and wrap it as a virtual sensor.
-
-    Parameters
-    ----------
-    grid : SpatialGrid
-        The spatial grid of the simulation.
-    solver : AdvectionDiffusionSolver
-        The PDE solver instance.
-    phi0 : Array
-        Initial condition field of shape ``(ny, nx)`` or multiple fields of shape ``(K, ny, nx)``.
-    pde_params : PDEParams
-        Physical parameters (velocity field, diffusivity) for the PDE.
-    ts : Array
-        Sorted 1-D array of timestamps [s] at which the field is simulated.
-
-    Returns
-    -------
-    sensor : SpatiotemporalInterpolator or list of SpatiotemporalInterpolator
-        A spatiotemporal interpolator (or list of them) representing the simulated field(s).
-    """
-    ts_jax = jnp.asarray(ts, dtype=jnp.float32)
-    t0_val = float(ts_jax[0])
-    t_end_val = float(ts_jax[-1])
-
-    if phi0.ndim == 3:
-        # Batch solve over the first dimension (number of independent fields)
-        num_pdes = phi0.shape[0]
-        if pde_params.u_field.ndim == 3:
-            u_fields = jnp.broadcast_to(pde_params.u_field, (num_pdes, *pde_params.u_field.shape))
-        else:
-            u_fields = pde_params.u_field
-
-        D_val = pde_params.D  # noqa: N806
-        if D_val.ndim == 0:
-            D_val = jnp.broadcast_to(D_val, (num_pdes,))  # noqa: N806
-
-        batched_params = PDEParams(u_field=u_fields, D=D_val)
-
-        solve_vmap = jax.vmap(
-            lambda p0, p_p: solver.solve(p0, p_p, t0=t0_val, t_end=t_end_val, saveat=ts_jax)
-        )
-        snapshots = solve_vmap(phi0, batched_params)  # shape (K, nt, ny, nx)
-        return [SpatiotemporalInterpolator(grid, ts_jax, snap) for snap in snapshots]
-    else:
-        snapshots = solver.solve(phi0, pde_params, t0=t0_val, t_end=t_end_val, saveat=ts_jax)
-        return SpatiotemporalInterpolator(grid, ts_jax, snapshots)

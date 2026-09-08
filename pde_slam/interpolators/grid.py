@@ -40,7 +40,7 @@ class SpatialGrid:
 
         xs = jnp.linspace(x_min, x_max, nx)
         ys = jnp.linspace(y_min, y_max, ny)
-        self.XX, self.YY = jnp.meshgrid(xs, ys)  # shape (ny, nx)
+        self.XX, self.YY = jnp.meshgrid(xs, ys, indexing="ij")  # shape (nx, ny)
 
     @property
     def query_points(self) -> Array:
@@ -49,8 +49,8 @@ class SpatialGrid:
 
     @property
     def shape(self) -> tuple[int, int]:
-        """``(ny, nx)`` shape tuple."""
-        return (self.ny, self.nx)
+        """``(nx, ny)`` shape tuple."""
+        return (self.nx, self.ny)
 
     def __repr__(self) -> str:
         return (

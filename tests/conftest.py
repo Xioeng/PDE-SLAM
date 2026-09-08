@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import jax
-
-jax.config.update("jax_enable_x64", True)
-
 import pytest
 
 from pde_slam.interpolators import SpatialGrid
+
+jax.config.update("jax_enable_x64", True)
 
 
 @pytest.fixture(scope="session")
@@ -20,4 +19,6 @@ def small_grid() -> SpatialGrid:
 @pytest.fixture(scope="session")
 def medium_grid() -> SpatialGrid:
     """A medium 64×64 grid for integration tests."""
-    return SpatialGrid(x_min=-500.0, x_max=500.0, y_min=-500.0, y_max=500.0, nx=64, ny=64)
+    return SpatialGrid(
+        x_min=-500.0, x_max=500.0, y_min=-500.0, y_max=500.0, nx=64, ny=64
+    )

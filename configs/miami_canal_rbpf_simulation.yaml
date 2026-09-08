@@ -1,0 +1,56 @@
+# =============================================================================
+# Miami Canal Multi-Field RBPF-SLAM Simulation Experiment Configuration
+# =============================================================================
+
+simulation:
+  sim_dir: "data/adv_diff_simulations/miami_canal"
+  fields:
+    - "Chlorophyll"
+    - "Salinity"
+    - "Temperature"
+    - "ODO"
+  mask_outside: true
+
+ic_anchors:
+  mode: "auto"
+  n_points: 100
+  seed: 42
+  epochs: 30  # warm-up gradient steps on IC buffer (was hardcoded 30)
+
+robot:
+  kinematics: "diff_drive"
+  nominal_speed: 0.25
+  dt: 1.0
+  v_noise_std: 0.02        # VELOCITY_NOISE_STD (was hardcoded 0.01)
+  omega_noise_std: 0.005   # OMEGA_NOISE_STD    (was hardcoded 0.005)
+  acceptance_radius: 5.0
+  waypoints_mode: "auto"
+
+rbpf:
+  n_particles: 200
+  pos_init_std: 0.2          # was hardcoded std_dev=[0.2, 0.2, ...]
+  heading_init_std: 0.02     # was hardcoded std_dev=[..., ..., 0.02]
+  measurement_noise_std: 0.001  # OBS_NOISE_STD (was hardcoded 0.001)
+  lin_process_noise: 0.0001
+  p0_lin: 0.0025
+  resample_threshold: 0.5
+  seed: 43                   # matches original seed=43 on RbpfSlam
+
+pinn:
+  arch: "mlp"  # was hardcoded modified_mlp
+  hidden_dim: 64
+  num_layers: 3
+  learning_rate: 0.01  # was hardcoded 1e-3
+  num_steps: 10         # was hardcoded 10
+  num_colloc: 100
+  margin: 10.0          # was hardcoded 20.0
+  w_pde: 0.05
+
+output:
+  sim_name: "miami_canal"
+  results_dir: "output"
+  checkpoints: [0, 25, 50, 75, 100]
+  satellite_zoom: 20
+  save_experiment: true
+  save_grids: false
+

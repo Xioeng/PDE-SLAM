@@ -1,0 +1,64 @@
+# =============================================================================
+# Biscayne Bay Survey RBPF-SLAM Experiment Configuration
+# Ingests real field survey CSV trajectory, performs kinematic interpolation
+# capped to 500s, simulates dead reckoning noise, and executes RBPF + PINN SLAM.
+# =============================================================================
+
+simulation:
+  # Path to external simulation directory (configurable to any .npz dataset)
+  sim_dir: "data/adv_diff_simulations/slam_pde2"
+  fields:
+    - "Salinity"
+    - "Temperature"
+    - "ODO"
+    - "Chlorophyll"
+  mask_outside: true
+
+survey:
+  csv_path: "data/csv/20260901deployment2.csv"
+  t_max: 500.0
+  dt: 1.0
+  use_csv_measurements: false  # true to use CSV probe readings; false to sample sim_dir
+
+ic_anchors:
+  mode: "auto"
+  n_points: 100
+  seed: 42
+  epochs: 30
+
+robot:
+  kinematics: "diff_drive"
+  nominal_speed: 0.7
+  dt: 1.0
+  v_noise_std: 0.01        # VELOCITY_NOISE_STD for dead reckoning
+  omega_noise_std: 0.005   # OMEGA_NOISE_STD for dead reckoning
+  acceptance_radius: 2.0
+
+rbpf:
+  n_particles: 200
+  pos_init_std: 0.2
+  heading_init_std: 0.02
+  measurement_noise_std: 0.001
+  lin_process_noise: 0.0001
+  p0_lin: 0.0025
+  resample_threshold: 0.5
+  seed: 43
+
+pinn:
+  arch: "mlp"
+  hidden_dim: 64
+  num_layers: 3
+  learning_rate: 0.01
+  num_steps: 10
+  num_colloc: 100
+  margin: 10.0
+  w_pde: 0.05
+
+output:
+  sim_name: "biscayne_survey_experiment2"
+  results_dir: "output"
+  checkpoints: [0, 25, 50, 75, 100]
+  satellite_zoom: 20
+  save_experiment: true
+  save_grids: false
+

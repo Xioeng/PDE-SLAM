@@ -125,26 +125,26 @@ class TestSpatiotemporalInterpolator:
 
         from pde_slam.interpolators import SpatiotemporalInterpolator
 
-        # Create a simple 3x3 grid
-        grid = SpatialGrid(x_min=0.0, x_max=2.0, y_min=0.0, y_max=2.0, nx=3, ny=3)
+        # Create an asymmetric 4x3 grid
+        grid = SpatialGrid(x_min=0.0, x_max=3.0, y_min=0.0, y_max=2.0, nx=4, ny=3)
         ts = jnp.array([0.0, 1.0, 2.0])
 
-        # Create snapshots: f(x, y, t) = x + y + t
-        # grid.XX has shape (ny, nx) -> XX[y, x]
-        t_grid, y_grid, x_grid = jnp.meshgrid(ts, grid.YY[:, 0], grid.XX[0, :], indexing="ij")
-        snapshots = x_grid + y_grid + t_grid  # shape (3, 3, 3)
+        # Create snapshots with 'ij' indexing: f(x, y, t) = x + 2*y + 3*t
+        t_grid, x_grid, y_grid = jnp.meshgrid(
+            ts, grid.XX[:, 0], grid.YY[0, :], indexing="ij"
+        )
+        snapshots = x_grid + 2.0 * y_grid + 3.0 * t_grid  # shape (3, 4, 3)
 
         interp = SpatiotemporalInterpolator(grid, ts, snapshots)
 
         # 1. Test exact values at grid nodes
         val = interp(1.0, 1.0, 1.0)
-        assert float(val) == pytest.approx(3.0, abs=1e-5)
+        assert float(val) == pytest.approx(6.0, abs=1e-5)
 
         # 2. Test intermediate coordinates (trilinear interpolation)
-        # (x, y, t) = (0.5, 1.5, 0.5)
-        # Expected: 0.5 + 1.5 + 0.5 = 2.5
+        # (x, y, t) = (0.5, 1.5, 0.5) -> 0.5 + 2(1.5) + 3(0.5) = 5.0
         val_interp = interp(0.5, 1.5, 0.5)
-        assert float(val_interp) == pytest.approx(2.5, abs=1e-5)
+        assert float(val_interp) == pytest.approx(5.0, abs=1e-5)
 
         # 3. Test differentiability w.r.t coordinates
         grad_fn = jax.grad(lambda x: interp(x, 1.0, 1.0))
@@ -158,3 +158,58 @@ class TestSpatiotemporalInterpolator:
         grad_snaps = jax.grad(loss)(snapshots)
         assert grad_snaps.shape == snapshots.shape
         assert float(jnp.sum(grad_snaps)) == pytest.approx(1.0, abs=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# GaussianProcessField
+# ---------------------------------------------------------------------------
+
+
+class TestGaussianProcessField:
+    def test_gp_single_field_fit_predict(self) -> None:
+        import jax.numpy as jnp
+
+        from pde_slam.interpolators.gp import GaussianProcessField
+
+        xy, vals = _make_scattered(n=30, seed=1)
+        gp = GaussianProcessField(
+            grid=GRID, lengthscale=20.0, signal_variance=1.0, noise_variance=1e-4
+        )
+        gp.fit(jnp.array(xy), jnp.array(vals))
+
+        # 1. Prediction at observations should be close to ground truth
+        mu_obs, var_obs = gp.predict(jnp.array(xy[:5]))
+        assert mu_obs.shape == (5,)
+        assert var_obs.shape == (5,)
+        assert jnp.allclose(mu_obs, vals[:5], atol=0.05)
+        assert bool(jnp.all(var_obs < 0.05))
+
+        # 2. Prediction far away should have variance approaching signal_variance
+        far_point = jnp.array([[200.0, 200.0]])
+        _, var_far = gp.predict(far_point)
+        assert float(var_far[0]) == pytest.approx(1.0, abs=0.05)
+
+    def test_gp_multi_field_and_grid_predict(self) -> None:
+        import jax.numpy as jnp
+
+        from pde_slam.interpolators.gp import GaussianProcessField
+
+        xy, vals1 = _make_scattered(n=25, seed=2)
+        _, vals2 = _make_scattered(n=25, seed=3)
+        multi_vals = jnp.column_stack([vals1, vals2])  # (25, 2)
+
+        gp = GaussianProcessField(grid=GRID, lengthscale=15.0, kernel="matern32")
+        gp.fit(jnp.array(xy), multi_vals)
+
+        # Multi-field query shape
+        query_pts = jnp.array([[0.0, 0.0], [10.0, -10.0]])
+        mu, var = gp.predict(query_pts)
+        assert mu.shape == (2, 2)
+        assert var.shape == (2, 2)
+
+        # Grid prediction
+        grid_mu, grid_var = gp.predict_grid(GRID)
+        assert grid_mu.shape == (20, 20, 2)
+        assert grid_var.shape == (20, 20, 2)
+        assert bool(jnp.all(jnp.isfinite(grid_mu)))
+        assert bool(jnp.all(grid_var >= 0.0))

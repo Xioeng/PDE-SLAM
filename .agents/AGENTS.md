@@ -1,22 +1,20 @@
 # PDE-SLAM — Project Rules
 
-## Code Style
-- Use `jnp.*` (JAX numpy) everywhere inside `pde_slam/`. Avoid `np.*` in library code.
-- Never write Python loops over array elements. Use `jnp.where`, `jax.lax.scan`, or `jax.vmap`.
-- All public functions must have NumPy-style docstrings with Parameters and Returns sections.
-- Always include `from __future__ import annotations` at the top of every module.
-- Keep line length at 100 characters (ruff enforced).
+## Architecture & Code Style
+- **Object-Oriented with JAX**: Maintain an Object-Oriented (OO) interface across the library (e.g. `RbpfSlam`, `DiffDriveKinematics`, `PinnFieldMap`, `SpatialGrid`, `SpatiotemporalInterpolator`), storing state cleanly on instances while executing array operations with JAX (`jnp.*`).
+- **Selective JIT Compilation**: Only `@jax.jit` compile pure, statically-shaped mathematical kernels and performance-critical inner steps (e.g., motion propagation, Kalman updates, PINN forward passes, PDE loss gradient steps). Avoid blanket `@jax.jit` on large stateful methods or non-critical orchestration code.
+- **Vectorization**: Never write Python loops over array or particle elements. Use `jnp.where`, `jax.lax.scan`, or `jax.vmap`.
+- **Concise & Modular Functions**: Keep functions short and focused on a single responsibility (avoid long monolithic functions unless a single contiguous JIT kernel is strictly required).
+- **Public API & Docstrings**: All public classes and functions must have NumPy-style docstrings with Parameters and Returns sections.
+- **Formatting**: Keep line length at 88 characters (enforced by `ruff`).
 
-## Numerical Safety
-- Always verify Courant number <= 1 and diffusion number <= 0.5 before running long solves.
-- Document the boundary condition assumption (default: zero-Neumann) in any new stencil.
+## Numerical Safety & Physics
+- Evaluate PDE physical constraints via JAX autodiff residuals ($\mathcal{R}_{\text{PDE}} = u_t + \mathbf{v} \cdot \nabla u - D \nabla^2 u$).
+- Ground truth solutions are ingested from pre-computed external hydrodynamic simulation datasets (e.g. `.npz` files) via continuous spatio-temporal lookup tables rather than running forward time-stepping solvers.
 
-## Testing
-- New solver features must have a corresponding test in `tests/`.
-- Run `pytest -v` before marking work complete.
-- Use fixtures from `tests/conftest.py` for grid and field setup.
-
-## Tooling
+## Testing & Tooling
 - Use `uv` for all dependency management (`uv sync --all-extras`).
+- New features and refactored modules must have corresponding unit tests in `tests/`.
+- Run `pytest -v` before marking work complete.
 - Run `ruff check pde_slam/ tests/` and `ruff format pde_slam/ tests/` before committing.
-- Type-check with `mypy pde_slam/` for any new public API.
+- Type-check with `mypy pde_slam/` for public APIs.

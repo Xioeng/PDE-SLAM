@@ -12,7 +12,7 @@ from jax import Array
 
 
 class BaseKinematics(ABC):
-    """Abstract base class defining the standard interface for robot kinematics in PDE-SLAM.
+    """Abstract base class defining the standard interface for kinematics in PDE-SLAM.
 
     This ensures that any custom kinematics model is drop-in compatible with the rest
     of the codebase (such as the optimization module and pipeline).

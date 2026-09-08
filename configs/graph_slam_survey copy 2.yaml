@@ -1,0 +1,114 @@
+# =============================================================================
+# Graph-SLAM + per-field PINN survey experiment (no RBPF)
+#
+# Pose-graph SLAM localized by scalar-field measurement factors. Reuses the
+# simulation / survey / robot / pinn / output sections of the RBPF configs and
+# adds a `graph_slam:` section for the graph-specific parameters.
+#
+#   uv run python examples/graph_slam_pinn_survey.py \
+#       --config configs/graph_slam_survey.yaml --no-show
+# =============================================================================
+
+simulation:
+  sim_dir: "data/adv_diff_simulations/slam_pde2"
+  fields:
+    - "Salinity"
+    - "Temperature"
+    - "ODO"
+    - "Chlorophyll"
+  mask_outside: true
+
+survey:
+  csv_path: "data/csv/20260901deployment2.csv"
+  t_max: 500.0
+  dt: 1.0
+  use_csv_measurements: true
+
+ic_anchors:
+  mode: "auto"
+  n_points: 100
+  seed: 42
+  epochs: 30
+
+robot:
+  kinematics: "diff_drive"
+  nominal_speed: 0.7
+  dt: 1.0
+  v_noise_std: 0.01        # dead-reckoning linear velocity noise [m/s]
+  omega_noise_std: 0.005   # dead-reckoning yaw-rate noise [rad/s]
+  acceptance_radius: 2.0
+
+# Only measurement_noise_std is used by the graph-SLAM scripts (as the sensor
+# noise floor); the particle-filter entries are ignored here.
+rbpf:
+  measurement_noise_std: 0.001
+
+# =============================================================================
+# PINN field maps -- one independent single-output network PER FIELD.
+#
+# Map error directly bounds achievable localization accuracy: position
+# observability is (map error)/(spatial gradient), and this dataset's fields
+# vary by only ~0.01 units/m. Undertraining the map is therefore the single
+# biggest cause of poor SLAM accuracy here, so num_steps is well above the
+# RBPF configs' value.
+# =============================================================================
+pinn:
+  arch: "mlp"
+  hidden_dim: 32
+  num_layers: 3
+  learning_rate: 0.001
+  num_steps: 150        # gradient steps per fit (10 leaves the map badly underfit)
+  num_colloc: 100
+  margin: 10.0
+  w_pde: 0.05
+
+# =============================================================================
+# Graph-SLAM specific parameters
+# =============================================================================
+graph_slam:
+  optimize_interval: 5     # steps between Gauss-Newton optimizations
+  optimize_iters: 5        # Gauss-Newton iterations per optimization
+  fit_interval: 1          # steps between PINN refits
+  max_correction: 2.0      # trust-region cap [m] on one field correction step
+  refresh_window: 60       # trailing nodes re-linearized against current maps
+
+  # Assumed map predictive error, as a fraction of each field's observed
+  # min-max range (that range is stored per node). Deliberately NOT the
+  # training loss: training loss is in-sample and collapses toward zero, which
+  # makes corrections overconfident enough to overpower odometry and drag the
+  # graph wherever a drift-fitted map points (observed: error blew up to 45 m).
+  map_error_frac: 0.05
+
+  # Train on zero-mean/unit-variance fields. Raw units are a poor target here
+  # (salinity ~30.04 with a spatial std of only ~0.10), so the network spends
+  # its capacity on the DC offset instead of the spatial structure.
+  normalize_fields: true
+
+  # Correct a node BEFORE refitting, so the map used has not yet seen that
+  # node's own reading. Correcting after the fit lets the map memorize the
+  # observation at the drifted position, collapsing the residual to ~0 so the
+  # correction reports "already correct" no matter how far off the pose is.
+  correct_before_fit: true
+
+  pinn_steps: 40
+  pinn_batch: 256          # sampled observations per gradient step
+
+  # Loop closure by MEASUREMENT SIGNATURE, not by proximity: two nodes whose
+  # stored scalar readings match are likely the same physical place. Proximity
+  # in the drifted estimate produces false matches (this survey's zigzag has
+  # >1200 naturally-close point pairs even in ground truth).
+  loop_closure:
+    enabled: true
+    tol: 0.06              # max signature distance (~0.3 m discrimination)
+    min_gap: 50            # min node-index separation for a match to count
+    max_radius: 15.0       # reject a match this far away in the current estimate
+    information: 4.0       # constraint weight (4.0 ~ 0.5 m std)
+    position_only: true    # tie positions, leave headings free
+
+output:
+  sim_name: "graph_slam_survey"
+  results_dir: "output"
+  checkpoints: [0, 25, 50, 75, 100]
+  satellite_zoom: 20
+  save_experiment: false
+  save_grids: false

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 import jax.numpy as jnp
 import numpy as np
@@ -33,12 +33,19 @@ class FieldInterpolator:
         RBF smoothing factor (0 = exact interpolation).
     """
 
+    grid: SpatialGrid
+    method: Literal["rbf", "spline"]
+    _kernel_args: dict[str, Any]
+    _xy_obs: np.ndarray | None
+    _values: np.ndarray | None
+
     def __init__(
         self,
         grid: SpatialGrid,
         method: Literal["rbf", "spline"] = "rbf",
-        **kernel_args,
+        **kernel_args: Any,
     ) -> None:
+
         if method not in ("rbf", "spline"):
             raise ValueError(f"method must be 'rbf' or 'spline'; got {method!r}")
         self.grid = grid
@@ -132,7 +139,7 @@ class FieldInterpolator:
             values,
             **self._kernel_args,
         )
-        # Convert grid query points to NumPy array since SciPy RBFInterpolator requires it
+        # Convert grid query points to NumPy array (required by SciPy RBFInterpolator)
         query_pts_np = np.asarray(self.grid.query_points, dtype=np.float64)
         return rbf(query_pts_np)
 

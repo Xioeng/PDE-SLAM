@@ -11,7 +11,7 @@ class SpatiotemporalInterpolator:
     """JAX-compatible, differentiable spatiotemporal interpolator for uniform grids.
 
     This class performs trilinear interpolation (1D in time, 2D in space) over
-    dense PDE solver snapshots of shape ``(nt, ny, nx)`` corresponding to
+    dense PDE solver snapshots of shape ``(nt, nx, ny)`` corresponding to
     timestamps ``ts``.
 
     Parameters
@@ -21,10 +21,15 @@ class SpatiotemporalInterpolator:
     ts : Array
         Sorted 1D array of shape ``(nt,)`` containing the snapshot timestamps.
     snapshots : Array
-        3D array of shape ``(nt, ny, nx)`` containing the solver solution snapshots.
+        3D array of shape ``(nt, nx, ny)`` containing the solver solution snapshots.
     """
 
+    grid: SpatialGrid
+    ts: Array
+    snapshots: Array
+
     def __init__(self, grid: SpatialGrid, ts: Array, snapshots: Array) -> None:
+
         self.grid = grid
         self.ts = jnp.asarray(ts, dtype=jnp.float32)
         self.snapshots = jnp.asarray(snapshots, dtype=jnp.float32)
@@ -66,8 +71,16 @@ class SpatiotemporalInterpolator:
         t = jnp.asarray(t, dtype=jnp.float32)
 
         # Map physical space coordinates to continuous grid indices
-        x_idx = (x - self.grid.x_min) / (self.grid.x_max - self.grid.x_min) * (self.grid.nx - 1)
-        y_idx = (y - self.grid.y_min) / (self.grid.y_max - self.grid.y_min) * (self.grid.ny - 1)
+        x_idx = (
+            (x - self.grid.x_min)
+            / (self.grid.x_max - self.grid.x_min)
+            * (self.grid.nx - 1)
+        )
+        y_idx = (
+            (y - self.grid.y_min)
+            / (self.grid.y_max - self.grid.y_min)
+            * (self.grid.ny - 1)
+        )
 
         # Map physical time to continuous index via linear interpolation of indices
         t_xp = self.ts
@@ -79,8 +92,8 @@ class SpatiotemporalInterpolator:
         y_idx = jnp.clip(y_idx, 0.0, self.grid.ny - 1.0)
         t_idx = jnp.clip(t_idx, 0.0, len(self.ts) - 1.0)
 
-        # Stack coordinates (axis 0 is the dimension of the grid: t, y, x)
-        coords = jnp.stack([t_idx, y_idx, x_idx], axis=0)
+        # Stack coordinates (axis 0 is the dimension of the grid: t, x, y)
+        coords = jnp.stack([t_idx, x_idx, y_idx], axis=0)
 
         # Perform trilinear interpolation
         return map_coordinates(self.snapshots, coords, order=1, mode="nearest")
